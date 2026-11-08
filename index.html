@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protocol Explorer · 网络协议交互实验室</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%232340c4'/><text x='16' y='22' font-size='13' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>L3</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9S9.6 5.5 12 3z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5l11 6.5-11 6.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5.5v13M16 5.5v13" stroke-width="3"/></symbol>
+  <symbol id="i-step" viewBox="0 0 24 24"><path d="M6 5.5l9 6.5-9 6.5z" fill="currentColor" stroke="none"/><path d="M18 5.5v13" stroke-width="2.4"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 11a8 8 0 1 1 2.3 6.3"/><path d="M4 5v6h6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="M5 9l7 7 7-7"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></symbol>
+</svg>
+
+<div class="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark"><span>L3</span></div>
+      <div class="brand-text">
+        <h1>PROTOCOL EXPLORER</h1>
+        <p data-i18n="tagline">了解互联网如何运作</p>
+        <div class="brand-credit">
+          <span data-i18n="schoolShort">浙江工商大学</span><i></i><b data-i18n="authorShort">邢建国</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-cell lesson-cell">
+      <span class="top-label" data-i18n="learning">正在学习</span>
+      <div class="lesson-name" id="lessonName">HTTP <em>→</em> WEB 通信</div>
+      <div class="lesson-progress"><div class="lesson-dots" id="lessonDots"></div><span id="lessonPct">课程完成</span></div>
+    </div>
+
+    <div class="top-cell osi-cell">
+      <span class="top-label">OSI 层</span>
+      <div class="osi-cells" id="osiCells"></div>
+      <span class="osi-caption" id="osiCaption">应用层</span>
+    </div>
+
+    <div class="top-cell layer-cell">
+      <span class="top-label" data-i18n="layer">应用层</span>
+      <div class="layer-badge" id="layerBadge">7</div>
+    </div>
+
+    <div class="top-cell progress-cell">
+      <span class="top-label" data-i18n="progress">学习进度</span>
+      <div class="progress-top"><b id="progressPct">7%</b><span id="progressCount">1 / 14 已完成</span></div>
+      <div class="progress-track"><i id="progressBar"></i></div>
+      <small data-i18n="inProgress">进行中</small>
+    </div>
+
+    <div class="top-actions">
+      <button class="lang-btn" id="langBtn" title="切换语言 / Switch language">
+        <svg><use href="#i-globe"/></svg><span>Zh</span><svg class="tiny"><use href="#i-chev-down"/></svg>
+      </button>
+      <button class="icon-btn theme-btn" id="themeBtn" title="切换主题">
+        <svg><use href="#i-moon"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ WORKSPACE ============ -->
+  <div class="workspace">
+
+    <!-- LEFT: protocol list -->
+    <aside class="sidebar">
+      <div class="side-head">
+        <h2 data-i18n="protocols">互联网协议</h2>
+        <button class="dots-btn" title="全部课程">···</button>
+      </div>
+      <div class="cat-tabs" id="catTabs"></div>
+      <div class="scroll-y protocol-scroll">
+        <div class="protocol-list" id="protocolList"></div>
+      </div>
+      <div class="side-foot">
+        <svg><use href="#i-info"/></svg>
+        <span data-i18n="sideTip">点击协议切换课程，展开可查看学习步骤</span>
+      </div>
+    </aside>
+
+    <!-- CENTER: visual + capture -->
+    <main class="stage">
+      <section class="visual">
+        <div class="visual-toolbar">
+          <div class="view-tabs">
+            <button class="active" data-view="network"><span class="vt-ico">◈</span><span data-i18n="networkView">网络</span></button>
+            <button data-view="sequence"><span class="vt-ico">≋</span><span data-i18n="timingView">时序</span></button>
+          </div>
+          <div class="visual-meta">
+            <span class="scene-chip" id="sceneChip">场景 01</span>
+            <span class="meta-sep"></span>
+            <span id="visualHint" data-i18n="visualHint">点击播放，观察数据包如何在网络中往返</span>
+          </div>
+        </div>
+
+        <div class="canvas" id="canvas">
+          <svg id="networkSvg" viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="网络拓扑动画">
+            <defs>
+              <pattern id="gridPattern" width="32" height="32" patternUnits="userSpaceOnUse" patternTransform="skewY(-18)">
+                <path d="M32 0H0V32" fill="none" stroke="var(--grid-line)" stroke-width="1"/>
+              </pattern>
+              <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0 1L9 5L0 9" fill="none" stroke="var(--link)" stroke-width="1.6"/>
+              </marker>
+              <marker id="arrowHeadDim" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0 1L9 5L0 9" fill="none" stroke="var(--link-dim)" stroke-width="1.6"/>
+              </marker>
+              <linearGradient id="packetGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#4f6ef2"/><stop offset="100%" stop-color="#1b32a8"/>
+              </linearGradient>
+              <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+                <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#1a35a0" flood-opacity="0.13"/>
+              </filter>
+            </defs>
+            <rect x="0" y="0" width="1000" height="520" fill="url(#gridPattern)"/>
+            <g id="linkLayer"></g>
+            <g id="nodeLayer"></g>
+            <g id="packetLayer"></g>
+          </svg>
+
+          <div class="sequence-wrap" id="sequenceWrap" hidden>
+            <svg id="sequenceSvg" viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="协议时序图"></svg>
+          </div>
+
+          <div class="canvas-legend" id="canvasLegend"></div>
+          <div class="canvas-corner" id="canvasCorner">192.168.1.10</div>
+        </div>
+      </section>
+
+      <section class="capture">
+        <div class="capture-head">
+          <div class="capture-title">
+            <h2 data-i18n="packets">数据包</h2>
+            <div class="legend" id="captureLegend"></div>
+          </div>
+          <div class="capture-tools">
+            <div class="speed" id="speedControl">
+              <button data-speed="0.5">0.5×</button>
+              <button data-speed="1" class="active">1×</button>
+              <button data-speed="2">2×</button>
+            </div>
+            <span class="tool-sep"></span>
+            <button class="tool-btn" id="prevBtn" title="上一个"><svg><use href="#i-left"/></svg></button>
+            <button class="play-btn" id="playBtn"><svg><use href="#i-play"/></svg><span data-i18n="play">播放</span></button>
+            <button class="tool-btn" id="stepBtn" title="单步"><svg><use href="#i-step"/></svg></button>
+            <button class="tool-btn" id="resetBtn" title="重置"><svg><use href="#i-reset"/></svg><span data-i18n="reset">重置</span></button>
+            <span class="step-count" id="stepCount">0 / 7</span>
+          </div>
+        </div>
+        <div class="table-scroll" id="tableScroll">
+          <table class="packet-table">
+            <thead>
+              <tr>
+                <th class="c-no" data-i18n="colNo">序号</th>
+                <th class="c-time" data-i18n="colTime">时间</th>
+                <th class="c-src" data-i18n="colSrc">源地址</th>
+                <th class="c-dst" data-i18n="colDst">目的地址</th>
+                <th class="c-proto" data-i18n="colProto">协议</th>
+                <th class="c-info" data-i18n="colInfo">信息</th>
+                <th class="c-size" data-i18n="colSize">大小</th>
+              </tr>
+            </thead>
+            <tbody id="packetBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- RIGHT: summary -->
+    <aside class="summary">
+      <div class="sum-head"><h2 data-i18n="summary">课程总结</h2><button class="sum-reset" id="sumReset" data-i18n="reset">重置</button></div>
+      <div class="sum-body">
+        <div class="sum-status" id="sumStatus"><span class="status-dot"></span><span data-i18n="courseDone">课程完成</span></div>
+        <h3 id="sumTitle">页面已送达</h3>
+        <p class="sum-desc" id="sumDesc"></p>
+
+        <div class="sum-stats" id="sumStats"></div>
+
+        <div class="sum-tip">
+          <div class="tip-title"><svg><use href="#i-info"/></svg><span data-i18n="tipTitle">知识点</span></div>
+          <p id="sumTip"></p>
+        </div>
+
+        <div class="sum-flow" id="sumFlow"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ============ PACKET DETAIL MODAL ============ -->
+<div class="modal" id="detailModal" hidden>
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <div class="packet-dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <header class="dlg-head">
+      <div class="dlg-title-wrap">
+        <span class="dlg-proto" id="dlgProto">DNS</span>
+        <div>
+          <h2 id="dlgTitle">DNS 响应</h2>
+          <p id="dlgSub">8.8.8.8 → 192.168.1.10 · DNS · 91 B</p>
+        </div>
+      </div>
+      <div class="dlg-actions">
+        <button class="dlg-nav" id="dlgPrev" title="上一个报文"><svg><use href="#i-left"/></svg></button>
+        <button class="dlg-nav" id="dlgNext" title="下一个报文"><svg><use href="#i-right"/></svg></button>
+        <button class="dlg-close" id="dlgClose" title="关闭"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </header>
+
+    <div class="dlg-capture-note"><span class="note-dot"></span><span id="dlgNote">在记录本电脑的网络适配器上抓到</span></div>
+
+    <div class="layer-strip" id="layerStrip"></div>
+
+    <div class="dlg-body">
+      <div class="fields-pane">
+        <div class="pane-head"><span data-i18n="fieldPane">协议字段</span><span class="pane-hint" data-i18n="fieldHint">悬停字段可高亮右侧字节</span></div>
+        <div class="fields-scroll" id="fieldsPane"></div>
+      </div>
+      <div class="hex-pane">
+        <div class="pane-head"><span data-i18n="hexPane">原始字节流</span><span class="pane-hint" id="hexCount">91 字节</span></div>
+        <div class="hex-scroll" id="hexDump"></div>
+        <div class="hex-foot"><span class="hex-tip"><span class="hex-tip-dot"></span><span data-i18n="hexTip">点击或悬停字节，可反查所属字段</span></span><span data-i18n="hexNote">灰显部分为无法打印的二进制字节</span></div>
+      </div>
+    </div>
+
+    <footer class="dlg-foot">
+      <svg><use href="#i-info"/></svg>
+      <span data-i18n="dlgFoot">每次高亮的字节范围都不相同；该视图不显示加密载荷、校验和与填充内容的展开细节。</span>
+    </footer>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
