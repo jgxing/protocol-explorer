@@ -91,7 +91,9 @@
     '报文总数': 'Packets', '已用时间': 'Elapsed',
     '组播地址': 'Multicast', '度量标准': 'Metric', '更新周期': 'Update interval',
     '最大跳数': 'Max hops', 'IP 协议号': 'IP protocol', '路由算法': 'Algorithm',
-    '报文类型': 'Packet types', '建连开销': 'Setup cost', '传输层': 'Transport'
+    '报文类型': 'Packet types', '建连开销': 'Setup cost', '传输层': 'Transport',
+    '协议版本': 'Version', '会话类型': 'Session type', '保活周期': 'Keepalive',
+    '路径属性': 'Path attributes'
   };
   const T = k => (I18N[state.lang] || I18N.zh)[k] || k;
   const trStat = k => state.lang === 'en' ? (STAT_EN[k] || k) : k;
@@ -101,7 +103,7 @@
     udp: '数据报已送达', ip: '分组已投递', arp: '地址已解析', icmp: '目标可达',
     dhcp: 'IP 地址已分配', tls: '安全通道已建立', websocket: '实时通道已建立',
     smtp: '邮件已投递', ftp: '文件列表已送达', quic: 'HTTP/3 响应已送达',
-    rip: '路由表已收敛', ospf: '链路状态已同步'
+    rip: '路由表已收敛', ospf: '链路状态已同步', bgp: '域间路由已收敛'
   };
   const sc = () => D.scenarios[state.scenario];
   const pk = () => sc().packets[state.index] || null;
@@ -174,7 +176,7 @@
 
   function nodeLabel(key, scene) {
     const custom = (scene.labels || {})[key] || {};
-    const name = custom.name || T(NODE_NAMES[key] || 'nodeWeb');
+    const name = (state.lang === 'en' && custom.en) || custom.name || T(NODE_NAMES[key] || 'nodeWeb');
     const ip = custom.ip || NODE_IPS[key] || '';
     return '<rect class="node-label-bg" x="-76" y="55" width="152" height="40" rx="5"/>' +
       '<text class="node-label" x="0" y="72" text-anchor="middle">' + esc(name) + '</text>' +

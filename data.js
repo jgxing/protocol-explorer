@@ -26,7 +26,7 @@
     dns: '#7c4dd6', http: '#dd9a12', tls: '#d24b6a', data: '#6b7aa5',
     arp: '#8a5cd6', icmp: '#0f9c9c', dhcp: '#7c4dd6', ws: '#dd9a12',
     quic: '#c04a8e', payload: '#7b89ad', smtp: '#dd9a12', ftp: '#dd9a12',
-    rip: '#e07b1f', ospf: '#2f9c6a'
+    rip: '#e07b1f', ospf: '#2f9c6a', bgp: '#a83f8f'
   };
 
   const MAC_CLIENT = '08:00:5e:5d:52:81';
@@ -83,7 +83,7 @@
         0x50, flags, ...U.u16(o.win || 64240), 0xf0, 0x2a, 0x00, 0x00],
       [
         F('源端口', String(sport), 0, 2, '客户端随机选择的临时端口（Ephemeral Port），用于区分本机不同连接。'),
-        F('目的端口', String(dport) + ' (' + (o.service || 'http') + ')', 2, 2, '熟知端口标识服务：80 = HTTP，443 = HTTPS，25 = SMTP，21 = FTP。'),
+        F('目的端口', String(dport) + ' (' + (o.service || 'http') + ')', 2, 2, '熟知端口标识服务：80 = HTTP，443 = HTTPS，25 = SMTP，21 = FTP，179 = BGP。'),
         F('序号 Seq', String(seq), 4, 4, '本报文段第一个数据字节的编号；SYN 会占用一个序号。'),
         F('确认号 Ack', String(ack), 8, 4, '期望收到的下一个字节编号，表示此前所有字节均已正确收到。'),
         F('数据偏移 / 保留', '5 (20 字节)', 12, 2, 'TCP 首部长度，单位 4 字节；无选项时为 20 字节。'),
@@ -435,10 +435,129 @@
     return { body: body, fields: fields };
   }
 
+  // BGP-4 (RFC 4271)：19 字节公共首部 + 报文体，承载在 TCP/179 之上
+  function BGP(type, typeLabel, body, bodyFields) {
+    const total = 19 + body.length;
+    const bytes = [...new Array(16).fill(0xff), ...U.u16(total), type, ...body];
+    return L('bgp', 'BGP-4', 'BGP', C.bgp, bytes, [
+      F('Marker 标记', '16 × 0xFF', 0, 16, 'BGP 报文的固定同步标记，16 字节全 1；早期用于认证，如今保持兼容，接收端据此确认报文边界。'),
+      F('长度 Length', total + ' 字节', 16, 2, '包含 19 字节公共首部在内的整个报文长度，取值 19~4096。TCP 是字节流，BGP 靠这个字段把一条条报文切分出来。'),
+      F('类型 Type', type + ' (' + typeLabel + ')', 18, 1, '1 OPEN 建立对等体，2 UPDATE 通告或撤销路由，3 NOTIFICATION 报错，4 KEEPALIVE 保活，5 ROUTE_REFRESH 请求重发。'),
+      ...bodyFields.map(f => F(f.n, f.v, 19 + f.o, f.l, f.d))
+    ]);
+  }
+
+  // OPEN 携带的可选参数：类型 2 = Capability，内部再套一层「能力码 + 长度 + 值」TLV
+  const BGP_CAPS = as => [
+    { code: 1, name: 'Multiprotocol Extensions', value: [0x00, 0x01, 0x00, 0x01],
+      valueText: 'AFI 1 (IPv4) · SAFI 1 (Unicast)',
+      desc: 'MP-BGP：声明可承载的地址族，使同一会话能同时通告 IPv4 / IPv6 / VPNv4 路由。',
+      valueDesc: 'AFI=1 表示 IPv4，中间 1 字节保留，SAFI=1 表示单播路由。' },
+    { code: 2, name: 'Route Refresh', value: [], valueText: '（无参数）',
+      desc: '允许在不中断 TCP 会话的前提下请求对端重发全部路由，策略变更后无需重置对等体。',
+      valueDesc: '' },
+    { code: 65, name: '4-Octet AS Number', value: U.u32(as), valueText: 'AS ' + as,
+      desc: '声明本端支持 4 字节 AS 号（超过 65535 的 AS）；能力不匹配时 OPEN 会被拒绝。',
+      valueDesc: '本端真实的 4 字节自治系统号，避免旧式 2 字节 AS 的 65535 上限。' }
+  ];
+
+  function BGP_OPEN(as, hold, routerId, caps) {
+    const capBytes = [], capFields = [];
+    let off = 0;
+    caps.forEach((c, i) => {
+      const tlv = [c.code, c.value.length, ...c.value];
+      const param = [0x02, tlv.length, ...tlv];
+      const p = '能力 #' + (i + 1) + ' · ';
+      capBytes.push(...param);
+      capFields.push(
+        { n: p + '参数类型', v: '2 (Capability)', o: off, l: 1, d: '可选参数类型 2 = 能力通告；OPEN 用它协商双方都支持的扩展。' },
+        { n: p + '参数长度', v: tlv.length + ' 字节', o: off + 1, l: 1, d: '这段能力 TLV 的字节数。' },
+        { n: p + '能力码', v: c.code + ' (' + c.name + ')', o: off + 2, l: 1, d: c.desc },
+        { n: p + '能力长度', v: c.value.length + ' 字节', o: off + 3, l: 1, d: '能力值的长度；Route Refresh 这类无参数能力为 0。' }
+      );
+      if (c.value.length) capFields.push({ n: p + '能力值', v: c.valueText, o: off + 4, l: c.value.length, d: c.valueDesc });
+      off += param.length;
+    });
+    const body = [4, ...U.u16(as), ...U.u16(hold), ...U.ip(routerId), capBytes.length, ...capBytes];
+    const fields = [
+      { n: '版本 Version', v: '4 (BGP-4)', o: 0, l: 1, d: 'BGP-4 支持 CIDR 无类域间路由与路由聚合，是当前互联网域间路由的唯一版本。' },
+      { n: '我的 AS 号 My AS', v: 'AS ' + as, o: 1, l: 2, d: '发送方所属自治系统号；对端据此判断这是 eBGP（AS 不同）还是 iBGP（AS 相同）。' },
+      { n: '保持时间 Hold Time', v: hold + ' s', o: 3, l: 2, d: '连续这么久收不到 KEEPALIVE / UPDATE 就判定对等体失效；双方协商取较小值，0 表示不启用保活。' },
+      { n: 'BGP 标识符 Router ID', v: routerId, o: 5, l: 4, d: '发送方在 AS 内的唯一标识，通常取最大的环回接口地址；两端不能相同。' },
+      { n: '可选参数长度', v: capBytes.length + ' 字节', o: 9, l: 1, d: '本 OPEN 携带的全部可选参数字节数；不支持的能力可忽略，不影响会话建立。' },
+      ...capFields.map(f => ({ n: f.n, v: f.v, o: 10 + f.o, l: f.l, d: f.d }))
+    ];
+    return { body: body, fields: fields };
+  }
+
+  // UPDATE：撤销路由长度 / 撤销前缀 / 路径属性总长 / 属性 TLV / NLRI
+  const BGP_PREFIX = pfx => {
+    const bits = Number(pfx.split('/')[1]);
+    return [bits, ...U.ip(pfx.split('/')[0]).slice(0, Math.ceil(bits / 8))];
+  };
+  function BGP_ATTR(name, flags, flagText, type, value, valueText, typeDesc, valueDesc) {
+    return { name: name, bytes: [flags, type, value.length, ...value],
+      flagText: flagText, valueText: valueText, desc: typeDesc, valueDesc: valueDesc };
+  }
+  function BGP_UPDATE(attrs, nlri, withdrawn) {
+    const w = [], wFields = [];
+    (withdrawn || []).forEach((p, i) => {
+      const b = BGP_PREFIX(p);
+      wFields.push({ n: '撤销前缀 #' + (i + 1), v: p, o: w.length, l: b.length,
+        d: 'Withdrawn Routes：用「前缀长度 + 网络号」声明该路由已不可达，接收方立即从路由表中删除。' });
+      w.push(...b);
+    });
+    const a = [], aFields = [];
+    attrs.forEach(at => {
+      const start = a.length;
+      a.push(...at.bytes);
+      aFields.push(
+        { n: at.name + ' · 标志', v: '0x' + at.bytes[0].toString(16) + ' (' + at.flagText + ')', o: start, l: 1,
+          d: '属性标志：0x80 Optional、0x40 Transitive、0x20 Partial、0x10 扩展长度。公认必遵属性固定为 0x40。' },
+        { n: at.name + ' · 类型', v: at.bytes[1] + ' (' + at.name + ')', o: start + 1, l: 1, d: at.desc },
+        { n: at.name + ' · 长度', v: (at.bytes.length - 3) + ' 字节', o: start + 2, l: 1,
+          d: '属性值的字节数；超过 255 字节时改用 2 字节扩展长度（置 0x10 标志位）。' }
+      );
+      if (at.bytes.length > 3) aFields.push({ n: at.name + ' · 值', v: at.valueText, o: start + 3,
+        l: at.bytes.length - 3, d: at.valueDesc });
+    });
+    const body = [...U.u16(w.length), ...w, ...U.u16(a.length), ...a];
+    const fields = [
+      { n: '撤销路由长度', v: w.length + ' 字节', o: 0, l: 2, d: 'Withdrawn Routes 区间的字节数；为 0 表示本报文只通告新路由。' },
+      ...wFields.map(f => ({ n: f.n, v: f.v, o: 2 + f.o, l: f.l, d: f.d })),
+      { n: '路径属性总长度', v: a.length + ' 字节', o: 2 + w.length, l: 2, d: '后面所有路径属性 TLV 的总字节数；为 0 表示本报文只撤销路由。' },
+      ...aFields.map(f => ({ n: f.n, v: f.v, o: 4 + w.length + f.o, l: f.l, d: f.d }))
+    ];
+    let nOff = body.length;
+    nlri.forEach((p, i) => {
+      const b = BGP_PREFIX(p);
+      fields.push({ n: 'NLRI #' + (i + 1) + ' · 网络层可达信息', v: p, o: nOff, l: b.length,
+        d: 'Network Layer Reachability Information：本报文新通告的前缀，与上面的路径属性一一对应。' });
+      body.push(...b);
+      nOff += b.length;
+    });
+    return { body: body, fields: fields };
+  }
+  function BGP_NOTIFICATION(code, codeText, sub, subText, data) {
+    const b = U.s(data);
+    return { body: [code, sub, ...b], fields: [
+      { n: '错误码 Error Code', v: code + ' (' + codeText + ')', o: 0, l: 1,
+        d: '1 首部错、2 OPEN 错、3 UPDATE 错、4 Hold Timer 超时、5 状态机错、6 Cease（主动关闭）。' },
+      { n: '错误子码 Error Subcode', v: sub + ' (' + subText + ')', o: 1, l: 1,
+        d: '对错误码的进一步说明；Cease/2 表示管理员主动关闭对等体，属于正常下线而非故障。' },
+      { n: '附加数据 Data', v: data, o: 2, l: b.length, d: '可选诊断信息；这里是一段可读文本，实际报文中常携带出错的属性或前缀。' }
+    ] };
+  }
+
   const IP_R1 = '10.0.12.1', IP_R2 = '10.0.12.2', IP_R2B = '10.0.23.2', IP_R3 = '10.0.23.3';
   const IP_RIP_MCAST = '224.0.0.9', IP_OSPF_MCAST = '224.0.0.5';
+  const BGP_PORT = 179;
   const ospfFrame = (src, dst, ospfLayer) =>
     [ethC(), IPV4(src, dst, 89, '89 (OSPF)', ospfLayer.bytes.length, { ttl: 1 }), ospfLayer];
+  // BGP 报文一律封装在 TCP/179；app 为 null 时表示纯 TCP 建连报文
+  const bgpFrame = (src, dst, sp, dp, seq, ack, flags, flagLabel, app, opts) =>
+    frame(src, dst, 6, '6 (TCP)',
+      tcpTo(sp, dp, seq, ack, flags, flagLabel, Object.assign({ service: 'bgp' }, opts)), app, opts);
 
   /* ---------- 场景数据 ---------- */
   const S = {};
@@ -1069,9 +1188,9 @@
       name: 'RIP', title: 'RIPv2 路由更新', cat: 'base', sub: '路由信息协议 · 距离向量',
       osi: 7, layer: 7, nodes: ['r1', 'gateway', 'r3'], seqNodes: ['r1', 'gateway', 'r3'],
       labels: {
-        r1: { name: '路由器 R1', ip: IP_R1 },
-        gateway: { name: '路由器 R2', ip: IP_R2 },
-        r3: { name: '路由器 R3', ip: IP_R3 }
+        r1: { name: '路由器 R1', en: 'Router R1', ip: IP_R1 },
+        gateway: { name: '路由器 R2', en: 'Router R2', ip: IP_R2 },
+        r3: { name: '路由器 R3', en: 'Router R3', ip: IP_R3 }
       },
       steps: [
         { t: '启动请求', d: '新上线的 R1 向 224.0.0.9 请求整张路由表', at: 1 },
@@ -1144,9 +1263,9 @@
       name: 'OSPF', title: 'OSPFv2 链路状态同步', cat: 'base', sub: '开放式最短路径优先 · 链路状态',
       osi: 3, layer: 3, nodes: ['r1', 'gateway', 'r3'], seqNodes: ['r1', 'gateway', 'r3'],
       labels: {
-        r1: { name: '路由器 R1', ip: IP_R1 },
-        gateway: { name: '路由器 R2', ip: IP_R2 },
-        r3: { name: '路由器 R3', ip: IP_R3 }
+        r1: { name: '路由器 R1', en: 'Router R1', ip: IP_R1 },
+        gateway: { name: '路由器 R2', en: 'Router R2', ip: IP_R2 },
+        r3: { name: '路由器 R3', en: 'Router R3', ip: IP_R3 }
       },
       steps: [
         { t: 'Hello 发现邻居', d: '组播 224.0.0.5，双向确认后建立邻接', at: 2 },
@@ -1204,8 +1323,134 @@
     });
   })();
 
+  /* 17 · BGP-4 —— 自治系统间的路径向量路由 */
+  (function () {
+    const origin = BGP_ATTR('ORIGIN', 0x40, 'Well-known / Transitive', 1, [0x00], '0 (IGP)',
+      '路由来源：0 IGP（network 语句引入）、1 EGP、2 Incomplete（重分发引入）；BGP 选路时 IGP 优先。',
+      '0 表示这条前缀由 AS 内部的 IGP 产生，可信度最高。');
+    const asPath = BGP_ATTR('AS_PATH', 0x40, 'Well-known / Transitive', 2,
+      [0x02, 0x01, ...U.u16(65001)], 'AS_SEQUENCE: 65001',
+      '记录路由经过的 AS 列表：既用于选路（越短越优），也是 eBGP 防环的核心 —— 看到自己的 AS 号就丢弃。',
+      '段类型 2 = AS_SEQUENCE，段内 1 个 AS 号 65001。');
+    const nextHop = BGP_ATTR('NEXT_HOP', 0x40, 'Well-known / Transitive', 3, U.ip(IP_R1), IP_R1,
+      '到达 NLRI 前缀的下一跳 IP；eBGP 通告时会改写为自己，iBGP 转发时默认保持不变。',
+      'R1 的 eBGP 接口地址；R3 必须能通过 IGP 到达它，否则要配置 next-hop-self。');
+    const med = BGP_ATTR('MULTI_EXIT_DISC', 0x80, 'Optional / Non-transitive', 4, U.u32(50), '50',
+      'MED 向相邻 AS 建议「从哪个入口进来」，值小者优先；只在两个直连 AS 之间比较，不跨 AS 传递。',
+      '本例取 50，仅影响 AS 65002 的入站选路。');
+    const localPref = BGP_ATTR('LOCAL_PREF', 0x40, 'Well-known / Discretionary', 5, U.u32(100), '100',
+      '本地优先级：只在 AS 内部的 iBGP 之间传播，值大者优先，且优先级高于 AS_PATH 长度。',
+      '默认 100；AS 65002 内部所有路由器据此统一选出出口。');
+    const community = BGP_ATTR('COMMUNITY', 0xc0, 'Optional / Transitive', 8,
+      [0xfd, 0xe9, 0x00, 0x64], '65001:100',
+      '团体属性给路由打标签，供对端按策略批量处理（限制传播范围、调整 LOCAL_PREF 等）。',
+      '前 2 字节为 AS 号 65001，后 2 字节为自定义值 100。');
+
+    const o1 = BGP_OPEN(65001, 180, IP_R1, BGP_CAPS(65001));
+    const o2 = BGP_OPEN(65002, 180, IP_R2, BGP_CAPS(65002));
+    const open1 = BGP(1, 'OPEN', o1.body, o1.fields);
+    const open2 = BGP(1, 'OPEN', o2.body, o2.fields);
+    const keepalive = BGP(4, 'KEEPALIVE', [], []);
+    const adv = BGP_UPDATE([origin, asPath, nextHop, med, community], ['192.168.1.0/24']);
+    const ibgp = BGP_UPDATE([origin, asPath, nextHop, med, localPref], ['192.168.1.0/24']);
+    const withdraw = BGP_UPDATE([], [], ['192.168.1.0/24']);
+    const notif = BGP_NOTIFICATION(6, 'Cease', 2, 'Administrative Shutdown', 'admin shutdown');
+
+    const S1 = 0x1a2b3c4d, S2 = 0x5e6f7a8b, A1 = S1 + 1, A2 = S2 + 1;
+    const EP = 41238, EP3 = 41240;
+    const up = BGP(2, 'UPDATE', adv.body, adv.fields);
+    const ui = BGP(2, 'UPDATE', ibgp.body, ibgp.fields);
+    const uw = BGP(2, 'UPDATE', withdraw.body, withdraw.fields);
+    const nf = BGP(3, 'NOTIFICATION', notif.body, notif.fields);
+
+    def('bgp', {
+      name: 'BGP', title: 'BGP-4 域间路由', cat: 'base', sub: '边界网关协议 · 路径向量',
+      osi: 7, layer: 7, nodes: ['r1', 'gateway', 'r3'], seqNodes: ['r1', 'gateway', 'r3'],
+      labels: {
+        r1: { name: 'AS65001 · R1', en: 'AS 65001 · R1', ip: IP_R1 },
+        gateway: { name: 'AS65002 · R2', en: 'AS 65002 · R2', ip: IP_R2 },
+        r3: { name: 'AS65002 · R3', en: 'AS 65002 · R3', ip: IP_R3 }
+      },
+      steps: [
+        { t: 'TCP 三次握手', d: '先与对端 179 端口建立可靠连接', at: 3 },
+        { t: 'OPEN 协商参数', d: '交换 AS 号、Router ID、Hold Time 与能力', at: 5 },
+        { t: 'KEEPALIVE 确认', d: '双方确认 OPEN 后进入 Established 状态', at: 7 },
+        { t: 'UPDATE 通告路由', d: '携带 NLRI 前缀与 ORIGIN / AS_PATH / NEXT_HOP', at: 8 },
+        { t: 'iBGP 内部转发', d: 'AS_PATH 与 NEXT_HOP 不变，追加 LOCAL_PREF', at: 9 },
+        { t: '撤销与会话终止', d: 'Withdrawn Routes 撤路由，NOTIFICATION 关闭对等体', at: 11 }
+      ],
+      desc: 'BGP-4 是互联网的核心路由协议：它不靠跳数或带宽，而是用「路径向量」在每个自治系统（AS）之间交换可达前缀。对等体先建立 TCP/179 连接，再用 OPEN 协商参数、KEEPALIVE 维持会话，之后所有路由的通告与撤销都由 UPDATE 完成。',
+      tip: 'BGP 是增量触发更新：会话建立时通告全表，之后只在拓扑变化时发送变化部分。eBGP（不同 AS）通告时改写 NEXT_HOP、追加自己的 AS 号；iBGP（同一 AS）转发时不改写这两项，改用 LOCAL_PREF 统一选出口，并要求全互联或路由反射器来避免环路。选路顺序大致为 LOCAL_PREF → AS_PATH 长度 → ORIGIN → MED。',
+      stats: [
+        { k: '承载协议', v: 'TCP / 179' },
+        { k: '协议版本', v: 'BGP-4 (RFC 4271)' },
+        { k: '会话类型', v: 'eBGP + iBGP' },
+        { k: '保活周期', v: 'Keepalive 60s / Hold 180s' },
+        { k: '报文类型', v: 'OPEN / UPDATE / KEEPALIVE / NOTIFICATION' },
+        { k: '路径属性', v: 'ORIGIN · AS_PATH · NEXT_HOP · LOCAL_PREF' }
+      ],
+      packets: [
+        P({ t: 0.000, src: IP_R1, dst: IP_R2, proto: 'TCP', kind: 'tcp', phase: 'TCP 建连',
+          from: 'r1', to: 'gateway', title: 'TCP SYN · 连接 179 端口',
+          info: '41238 → 179 · SYN · 发起 BGP 会话', osi: [4, 3, 2], layer: 4,
+          note: 'BGP 自己不做可靠传输和分片，而是复用 TCP。R1 用临时端口向 R2 的 179 端口发起三次握手；端口固定为 179 的那一端通常被视为服务端。',
+          layers: bgpFrame(IP_R1, IP_R2, EP, BGP_PORT, S1, 0, 0x02, 'SYN', null) }),
+        P({ t: 0.012, src: IP_R2, dst: IP_R1, proto: 'TCP', kind: 'tcp', phase: 'TCP 建连',
+          from: 'gateway', to: 'r1', title: 'TCP SYN + ACK',
+          info: '179 → 41238 · SYN, ACK · 同意建连', osi: [4, 3, 2], layer: 4,
+          note: 'R2 同意建立连接。TCP 提供按序、可靠、有流量控制的字节流，BGP 因此不必自己处理重传与乱序。',
+          layers: bgpFrame(IP_R2, IP_R1, BGP_PORT, EP, S2, A1, 0x12, 'SYN, ACK', null, { inbound: true }) }),
+        P({ t: 0.024, src: IP_R1, dst: IP_R2, proto: 'TCP', kind: 'tcp', phase: 'TCP 建连',
+          from: 'r1', to: 'gateway', title: 'TCP ACK · 连接建立',
+          info: '41238 → 179 · ACK · 进入 OpenSent', osi: [4, 3, 2], layer: 4,
+          note: '三次握手完成，BGP 状态机从 Active 进入 OpenSent，接下来由 TCP 载荷承载第一条 BGP OPEN 报文。',
+          layers: bgpFrame(IP_R1, IP_R2, EP, BGP_PORT, A1, A2, 0x10, 'ACK', null) }),
+        P({ t: 0.031, src: IP_R1, dst: IP_R2, proto: 'BGP', kind: 'open', phase: 'OPEN 协商',
+          from: 'r1', to: 'gateway', title: 'BGP OPEN (AS 65001)',
+          info: 'OPEN · AS 65001 · Hold 180s · 3 capabilities', osi: [7, 4, 3, 2], layer: 7,
+          note: 'R1 声明自己的 AS 号、BGP Router ID 与 180 秒 Hold Time，并通告 MP-BGP、Route Refresh、4 字节 AS 三项能力。AS 号不同，说明这是一条 eBGP 会话。',
+          layers: bgpFrame(IP_R1, IP_R2, EP, BGP_PORT, A1, A2, 0x18, 'PSH, ACK', open1) }),
+        P({ t: 0.043, src: IP_R2, dst: IP_R1, proto: 'BGP', kind: 'open', phase: 'OPEN 协商',
+          from: 'gateway', to: 'r1', title: 'BGP OPEN (AS 65002)',
+          info: 'OPEN · AS 65002 · Hold 180s · 能力匹配', osi: [7, 4, 3, 2], layer: 7,
+          note: 'R2 回送自己的 OPEN。双方校验版本、AS 号、Router ID 与 Hold Time；参数不匹配则用 NOTIFICATION 报错并退回 Idle 状态。',
+          layers: bgpFrame(IP_R2, IP_R1, BGP_PORT, EP, A2, A1, 0x18, 'PSH, ACK', open2, { inbound: true }) }),
+        P({ t: 0.052, src: IP_R1, dst: IP_R2, proto: 'BGP', kind: 'keepalive', phase: 'KEEPALIVE 确认',
+          from: 'r1', to: 'gateway', title: 'BGP KEEPALIVE (R1)',
+          info: 'KEEPALIVE · 19 B · 确认收到 OPEN', osi: [7, 4, 3, 2], layer: 7,
+          note: 'KEEPALIVE 只有 19 字节公共首部、没有报文体。收到对端 OPEN 后用它表示接受，状态机进入 OpenConfirm。',
+          layers: bgpFrame(IP_R1, IP_R2, EP, BGP_PORT, A1, A2, 0x18, 'PSH, ACK', keepalive) }),
+        P({ t: 0.061, src: IP_R2, dst: IP_R1, proto: 'BGP', kind: 'keepalive', phase: 'KEEPALIVE 确认',
+          from: 'gateway', to: 'r1', title: 'BGP KEEPALIVE (R2) · Established',
+          info: 'KEEPALIVE · 19 B · 会话建立完成', osi: [7, 4, 3, 2], layer: 7,
+          note: '双方互发 KEEPALIVE 后进入 Established —— 这时才可以交换 UPDATE。此后每 60 秒发一次保活，180 秒收不到就断开会话。',
+          layers: bgpFrame(IP_R2, IP_R1, BGP_PORT, EP, A2, A1, 0x18, 'PSH, ACK', keepalive, { inbound: true }) }),
+        P({ t: 0.078, src: IP_R1, dst: IP_R2, proto: 'BGP', kind: 'update', phase: '路由通告',
+          from: 'r1', to: 'gateway', title: 'BGP UPDATE · 通告 192.168.1.0/24',
+          info: 'UPDATE · NLRI 192.168.1.0/24 · AS_PATH 65001', osi: [7, 4, 3, 2], layer: 7,
+          note: 'R1 把自己的客户网段通告给 R2。UPDATE 同时携带路径属性：ORIGIN=IGP、AS_PATH=65001、NEXT_HOP=10.0.12.1、MED=50、COMMUNITY=65001:100，末尾的 NLRI 就是被通告的前缀。',
+          layers: bgpFrame(IP_R1, IP_R2, EP, BGP_PORT, A1, A2, 0x18, 'PSH, ACK', up) }),
+        P({ t: 0.096, src: IP_R2B, dst: IP_R3, proto: 'BGP', kind: 'update', phase: 'iBGP 内部转发',
+          from: 'gateway', to: 'r3', title: 'BGP UPDATE · iBGP 转发到 R3',
+          info: 'UPDATE · LOCAL_PREF 100 · NEXT_HOP 保持不变', osi: [7, 4, 3, 2], layer: 7,
+          note: 'R2 用 iBGP 把路由转发给同属 AS 65002 的 R3：AS_PATH 仍是 65001（不追加自己的 AS），NEXT_HOP 仍是 10.0.12.1，但新增只在本 AS 内传播的 LOCAL_PREF=100。R3 需靠 IGP 或 next-hop-self 到达该下一跳。',
+          layers: bgpFrame(IP_R2B, IP_R3, EP3, BGP_PORT, 0x74a1b2c3, 0x2b3c4d5e, 0x18, 'PSH, ACK', ui, { inbound: true }) }),
+        P({ t: 45.120, src: IP_R1, dst: IP_R2, proto: 'BGP', kind: 'update', phase: '路由撤销',
+          from: 'r1', to: 'gateway', title: 'BGP UPDATE · 撤销 192.168.1.0/24',
+          info: 'UPDATE · Withdrawn Routes 192.168.1.0/24', osi: [7, 4, 3, 2], layer: 7,
+          note: '链路故障后 R1 立刻发一条只含 Withdrawn Routes 的 UPDATE：路径属性与 NLRI 都为空。BGP 是增量更新，不必重发整张路由表，这正是它能承载全球数十万条前缀的关键。',
+          layers: bgpFrame(IP_R1, IP_R2, EP, BGP_PORT, A1, A2, 0x18, 'PSH, ACK', uw) }),
+        P({ t: 45.230, src: IP_R2, dst: IP_R1, proto: 'BGP', kind: 'notify', phase: '会话终止',
+          from: 'gateway', to: 'r1', title: 'BGP NOTIFICATION · Cease',
+          info: 'NOTIFICATION · Error 6/2 Administrative Shutdown', osi: [7, 4, 3, 2], layer: 7,
+          note: '管理员下线对等体时发送 NOTIFICATION（错误码 6 Cease / 子码 2 主动关闭），随后断开 TCP 连接，双方状态机退回 Idle；撤销的路由也会沿 AS 逐跳传播出去。',
+          layers: bgpFrame(IP_R2, IP_R1, BGP_PORT, EP, A2, A1, 0x18, 'PSH, ACK', nf, { inbound: true }) })
+      ]
+    });
+  })();
+
   /* ---------- 元信息 ---------- */
-  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf'];
+  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf', 'bgp'];
   const CATEGORIES = [
     { id: 'all', zh: '全部', en: 'All' },
     { id: 'base', zh: '基础', en: 'Core' },
@@ -1214,10 +1459,13 @@
   ];
   const KIND_COLORS = {
     dns: '#2f6fd0', tcp: '#0f9c9c', request: '#e8a317', response: '#7c4dd6',
-    ack: '#a5b0c7', tls: '#d24b6a', routing: '#2f8fd0', update: '#8a5cd6'
+    ack: '#a5b0c7', tls: '#d24b6a', routing: '#2f8fd0', update: '#8a5cd6',
+    open: '#e08a2e', keepalive: '#3aa87a', notify: '#d0483f'
   };
-  const KIND_ZH = { dns: 'DNS', tcp: 'TCP', request: '请求', response: '响应', ack: '纯 ACK', tls: 'TLS', routing: '路由报文', update: '路由更新' };
-  const KIND_EN = { dns: 'DNS', tcp: 'TCP', request: 'Request', response: 'Response', ack: 'Bare ACK', tls: 'TLS', routing: 'Routing', update: 'Route update' };
+  const KIND_ZH = { dns: 'DNS', tcp: 'TCP', request: '请求', response: '响应', ack: '纯 ACK', tls: 'TLS',
+    routing: '路由报文', update: '路由更新', open: 'OPEN 协商', keepalive: '保活', notify: '会话通知' };
+  const KIND_EN = { dns: 'DNS', tcp: 'TCP', request: 'Request', response: 'Response', ack: 'Bare ACK', tls: 'TLS',
+    routing: 'Routing', update: 'Route update', open: 'BGP OPEN', keepalive: 'Keepalive', notify: 'Notification' };
   const OSI_NAMES = ['物理层', '数据链路层', '网络层', '传输层', '会话层', '表示层', '应用层'];
 
   global.ProtocolData = {
