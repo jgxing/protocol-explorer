@@ -25,7 +25,8 @@
     eth: '#2749c9', ip: '#3f6fe0', tcp: '#0f9c9c', udp: '#12a08f',
     dns: '#7c4dd6', http: '#dd9a12', tls: '#d24b6a', data: '#6b7aa5',
     arp: '#8a5cd6', icmp: '#0f9c9c', dhcp: '#7c4dd6', ws: '#dd9a12',
-    quic: '#c04a8e', payload: '#7b89ad', smtp: '#dd9a12', ftp: '#dd9a12'
+    quic: '#c04a8e', payload: '#7b89ad', smtp: '#dd9a12', ftp: '#dd9a12',
+    rip: '#e07b1f', ospf: '#2f9c6a'
   };
 
   const MAC_CLIENT = '08:00:5e:5d:52:81';
@@ -68,7 +69,7 @@
         F('标识', '0x' + id.toString(16), 4, 2, '同一数据报的所有分片共享该标识，接收端据此重组。'),
         F('标志 / 片偏移', o.frag ? 'MF=1, offset=' + o.frag : 'DF=1, offset=0', 6, 2, 'DF 禁止分片，MF 表示后面还有分片；片偏移以 8 字节为单位。'),
         F('生存时间 TTL', String(ttl), 8, 1, '每经过一台路由器减 1，归零则丢弃并回送 ICMP 超时，防止环路。'),
-        F('上层协议', protoLabel || String(protoNum), 9, 1, '6 = TCP，17 = UDP，1 = ICMP；决定把载荷交给哪个传输层模块。'),
+        F('上层协议', protoLabel || String(protoNum), 9, 1, '6 = TCP，17 = UDP，1 = ICMP，89 = OSPF；决定把载荷交给哪个上层模块。'),
         F('首部校验和', '0x8a3f', 10, 2, '仅校验 IP 首部；每跳 TTL 变化都要重新计算。'),
         F('源地址', src, 12, 4, '发送主机的逻辑地址，网络层据此做路由寻址。'),
         F('目的地址', dst, 16, 4, '目标主机的逻辑地址，路由器按最长前缀匹配选择下一跳。')
@@ -99,7 +100,7 @@
       [...U.u16(sport), ...U.u16(dport), ...U.u16(8 + payloadLen), 0x3c, 0x91],
       [
         F('源端口', String(sport), 0, 2, '发送端临时端口，响应报文会把该值作为目的端口。'),
-        F('目的端口', String(dport), 2, 2, '53 = DNS，67/68 = DHCP，443 = QUIC。'),
+        F('目的端口', String(dport), 2, 2, '53 = DNS，67/68 = DHCP，443 = QUIC，520 = RIP (RIPv2)。'),
         F('长度', (8 + payloadLen) + ' 字节', 4, 2, 'UDP 首部 8 字节加上载荷长度。'),
         F('校验和', '0x3c91', 6, 2, '覆盖伪首部与整个数据报；IPv4 中可为 0 表示不校验。')
       ]);
@@ -301,6 +302,143 @@
     const l = TCP(sp, dp, seq, ack, flags, label, len, Object.assign({}, opts, { shown: len }));
     return l;
   };
+
+  /* ---------- 路由协议层构造器 ---------- */
+  // RIPv2 (RFC 2453)：4 字节首部 + N × 20 字节路由表项，承载在 UDP/520 之上
+  function RIP(command, entries) {
+    const bytes = [command, 0x02, 0x00, 0x00];
+    const fields = [
+      F('命令 Command', command === 1 ? '1 (Request)' : '2 (Response)', 0, 1, '1 = 向邻居请求路由表；2 = 发送自己的路由更新（周期性或触发式）。'),
+      F('版本 Version', '2 (RIPv2)', 1, 1, 'RIPv2 相比 v1 增加了子网掩码、下一跳与路由标记，并改用组播 224.0.0.9。'),
+      F('保留字段', '0x0000', 2, 2, '必须为 0，接收端忽略；RIPv1 同样保留这两字节。')
+    ];
+    let off = 4;
+    entries.forEach((e, i) => {
+      const afi = e.afi === undefined ? 2 : e.afi;
+      const tag = e.tag || 0;
+      const net = e.net || '0.0.0.0';
+      const mask = e.mask || '0.0.0.0';
+      const hop = e.hop || '0.0.0.0';
+      const metric = e.metric;
+      bytes.push(...U.u16(afi), ...U.u16(tag), ...U.ip(net), ...U.ip(mask), ...U.ip(hop), ...U.u32(metric));
+      const p = '表项 #' + (i + 1) + ' · ';
+      fields.push(
+        F(p + '地址族 AFI', afi === 0 ? '0x0000 (请求整表)' : '0x0002 (IPv4)', off, 2, '0x0002 表示后面是 IPv4 路由；0xFFFF 时这 20 字节用于认证数据。'),
+        F(p + '路由标记 Tag', String(tag), off + 2, 2, '区分内部路由与从其他路由协议重分发进来的外部路由。'),
+        F(p + '网络地址', net, off + 4, 4, '目的网段的网络号；请求整张路由表时填 0.0.0.0。'),
+        F(p + '子网掩码', mask, off + 8, 4, 'RIPv2 随路由携带掩码，支持 VLSM / CIDR；RIPv1 只能按自然类网络判断。'),
+        F(p + '下一跳', hop, off + 12, 4, '0.0.0.0 表示通告者自己就是下一跳；否则指定同网段内更优的路由器。'),
+        F(p + '度量 Metric', metric + (metric === 16 ? ' (不可达)' : ' 跳'), off + 16, 4, '跳数 1~15，16 表示不可达（路由毒化）。这正是 RIP 限制网络规模、收敛较慢的根源。')
+      );
+      off += 20;
+    });
+    return L('rip', 'RIPv2', 'RIP', C.rip, bytes, fields);
+  }
+
+  // OSPFv2 (RFC 2328)：24 字节公共首部 + 报文体，直接封装在 IP 数据报中（协议号 89）
+  function OSPF(type, typeLabel, routerId, areaId, body, bodyFields) {
+    const total = 24 + body.length;
+    const bytes = [0x02, type, ...U.u16(total), ...U.ip(routerId), ...U.ip(areaId),
+      0x7a, 0x4c, ...U.u16(0), ...U.z(8), ...body];
+    const fields = [
+      F('版本 Version', '2 (OSPFv2)', 0, 1, 'OSPFv2 面向 IPv4；支持 IPv6 的是 OSPFv3。'),
+      F('报文类型 Type', type + ' (' + typeLabel + ')', 1, 1, '1 Hello 发现邻居，2 DD 描述数据库，3 LSR 请求，4 LSU 更新，5 LSAck 确认。'),
+      F('报文长度', total + ' 字节', 2, 2, '包含 24 字节公共首部在内的整个 OSPF 报文长度。'),
+      F('Router ID', routerId, 4, 4, '区域内唯一标识一台路由器，通常手工指定为最大的环回接口地址。'),
+      F('Area ID', areaId, 8, 4, '0.0.0.0 即骨干区域 Area 0；其它区域都必须与骨干相连。'),
+      F('校验和', '0x7a4c', 12, 2, '覆盖整个 OSPF 报文（不含认证数据），由接收端校验完整性。'),
+      F('认证类型 AuType', '0 (Null)', 14, 2, '0 不认证、1 明文口令、2 MD5；教学场景用空认证。'),
+      F('认证数据', '8 字节全 0', 16, 8, 'AuType=0 时全 0；MD5 认证时携带密钥 ID、序列号与摘要。'),
+      ...bodyFields.map(f => F(f.n, f.v, 24 + f.o, f.l, f.d))
+    ];
+    return L('ospf', 'OSPFv2', 'OSPF', C.ospf, bytes, fields);
+  }
+
+  // LSA 首部（20 字节），被 DD / LSU / LSAck 复用
+  function LSA_HEADER(age, type, id, adv, seq, length) {
+    return [...U.u16(age), 0x02, type, ...U.ip(id), ...U.ip(adv), ...U.u32(seq), 0x9f, 0x2a, ...U.u16(length)];
+  }
+  function ROUTER_LSA(adv, links) {
+    const tail = [0x00, 0x00, ...U.u16(links.length)];
+    links.forEach(l => tail.push(...U.ip(l.id), ...U.ip(l.data), l.type, 0x00, ...U.u16(l.metric)));
+    return [...LSA_HEADER(60, 1, adv, adv, 0x80000003, 20 + tail.length), ...tail];
+  }
+  function OSPF_HELLO(mask, dr, bdr, neighbors) {
+    const body = [...U.ip(mask), ...U.u16(10), 0x02, 0x01, ...U.u32(40), ...U.ip(dr), ...U.ip(bdr)];
+    const fields = [
+      { n: '网络掩码', v: mask, o: 0, l: 4, d: '发送接口的子网掩码；掩码不一致的两台路由器无法建立邻居关系。' },
+      { n: 'Hello 间隔', v: '10 s', o: 4, l: 2, d: '每 10 秒发一次 Hello；两端取值必须一致。' },
+      { n: '可选项 Options', v: '0x02 (E-bit)', o: 6, l: 1, d: 'E 位表示本区域允许注入外部路由（非 Stub 区域）。' },
+      { n: '路由器优先级', v: '1', o: 7, l: 1, d: '用于 DR / BDR 选举；置 0 表示不参与选举。' },
+      { n: '死亡间隔', v: '40 s', o: 8, l: 4, d: '通常为 Hello 间隔的 4 倍；超时未收到 Hello 即判定邻居失效。' },
+      { n: '指定路由器 DR', v: dr, o: 12, l: 4, d: '广播网段由 DR 统一泛洪 LSA，把邻接关系数量从 O(n²) 降到 O(n)。' },
+      { n: '备份指定路由器 BDR', v: bdr, o: 16, l: 4, d: 'DR 失效时立即接管，避免重新选举造成收敛中断。' }
+    ];
+    let off = 20;
+    neighbors.forEach((nb, i) => {
+      body.push(...U.ip(nb));
+      fields.push({ n: '已发现邻居 #' + (i + 1), v: nb, o: off, l: 4, d: '列出已在 Hello 中看到自己的邻居；双方互相看到对方后才进入 2-Way 状态。' });
+      off += 4;
+    });
+    return { body: body, fields: fields };
+  }
+  function OSPF_DBD(seq, headers) {
+    const body = [...U.u16(1500), 0x02, 0x07, ...U.u32(seq)];
+    const fields = [
+      { n: '接口 MTU', v: '1500 B', o: 0, l: 2, d: '发送接口可承载的最大 IP 报文；两端不一致会卡在 ExStart 状态。' },
+      { n: '可选项 Options', v: '0x02', o: 2, l: 1, d: '声明本路由器支持的区域能力。' },
+      { n: '标志位 Flags', v: '0x07 (I / M / MS)', o: 3, l: 1, d: 'I = 初始报文，M = 后面还有，MS = 本端为主；主从由 Router ID 大小决定。' },
+      { n: 'DD 序列号', v: '0x' + seq.toString(16), o: 4, l: 4, d: '由主方递增，保证数据库描述按序、可靠地交换。' }
+    ];
+    let off = 8;
+    headers.forEach((h, i) => {
+      body.push(...h);
+      fields.push({ n: 'LSA 摘要 #' + (i + 1), v: 'Type 1 Router-LSA · 20 字节', o: off, l: 20, d: '只发送 LSA 首部（摘要）而非完整内容；对方据此比对 LSDB 并列出缺失项。' });
+      off += 20;
+    });
+    return { body: body, fields: fields };
+  }
+  function OSPF_LSR(items) {
+    const body = [], fields = [];
+    let off = 0;
+    items.forEach((it, i) => {
+      body.push(...U.u32(it.type), ...U.ip(it.id), ...U.ip(it.adv));
+      fields.push(
+        { n: '请求 #' + (i + 1) + ' · LS 类型', v: String(it.type), o: off, l: 4, d: '1 = Router-LSA，2 = Network-LSA，3/4/5 用于区域间与外部路由。' },
+        { n: '请求 #' + (i + 1) + ' · LS ID', v: it.id, o: off + 4, l: 4, d: '与通告路由器一起唯一确定一条 LSA。' },
+        { n: '请求 #' + (i + 1) + ' · 通告路由器', v: it.adv, o: off + 8, l: 4, d: '产生该 LSA 的路由器 Router ID。' }
+      );
+      off += 12;
+    });
+    return { body: body, fields: fields };
+  }
+  function OSPF_LSU(lsas) {
+    const body = [...U.u32(lsas.length)];
+    const fields = [{ n: 'LSA 数量', v: String(lsas.length), o: 0, l: 4, d: '本条 LSU 携带的链路状态通告条数；一次可以泛洪多条。' }];
+    let off = 4;
+    lsas.forEach((lsa, i) => {
+      body.push(...lsa);
+      fields.push({ n: 'LSA #' + (i + 1) + ' · 首部', v: '20 字节（LS 序号 / 校验和 / 长度）', o: off, l: 20, d: 'LS 序列号越大越新；校验和用于判断 LSA 是否损坏，老化时间到 3600 秒会被清除。' });
+      fields.push({ n: 'LSA #' + (i + 1) + ' · Router-LSA 内容', v: (lsa.length - 20) + ' 字节', o: off + 20, l: lsa.length - 20, d: '逐条列出本路由器的链路（类型、链路 ID、链路数据、开销）；全区域的 LSA 集合即链路状态数据库 LSDB。' });
+      off += lsa.length;
+    });
+    return { body: body, fields: fields };
+  }
+  function OSPF_LSACK(headers) {
+    const body = [], fields = [];
+    let off = 0;
+    headers.forEach((h, i) => {
+      body.push(...h);
+      fields.push({ n: '确认的 LSA 摘要 #' + (i + 1), v: '20 字节', o: off, l: 20, d: '显式确认已收到的 LSA；未收到确认会重传，保证泛洪可靠。' });
+      off += 20;
+    });
+    return { body: body, fields: fields };
+  }
+
+  const IP_R1 = '10.0.12.1', IP_R2 = '10.0.12.2', IP_R2B = '10.0.23.2', IP_R3 = '10.0.23.3';
+  const IP_RIP_MCAST = '224.0.0.9', IP_OSPF_MCAST = '224.0.0.5';
+  const ospfFrame = (src, dst, ospfLayer) =>
+    [ethC(), IPV4(src, dst, 89, '89 (OSPF)', ospfLayer.bytes.length, { ttl: 1 }), ospfLayer];
 
   /* ---------- 场景数据 ---------- */
   const S = {};
@@ -910,8 +1048,164 @@
     });
   })();
 
+  /* 15 · RIP —— 距离向量路由 */
+  (function () {
+    const request = RIP(1, [{ afi: 0, net: '0.0.0.0', mask: '0.0.0.0', hop: '0.0.0.0', metric: 16 }]);
+    const r2Routes = RIP(2, [
+      { net: '10.0.23.0', mask: '255.255.255.0', metric: 1 },
+      { net: '192.168.2.0', mask: '255.255.255.0', hop: IP_R3, metric: 2 }
+    ]);
+    const r1Routes = RIP(2, [
+      { net: '192.168.1.0', mask: '255.255.255.0', metric: 1 },
+      { net: '10.0.12.0', mask: '255.255.255.0', metric: 1 }
+    ]);
+    const periodic = RIP(2, [
+      { net: '10.0.12.0', mask: '255.255.255.0', metric: 1 },
+      { net: '192.168.1.0', mask: '255.255.255.0', hop: IP_R1, metric: 2 }
+    ]);
+    const poison = RIP(2, [{ net: '192.168.2.0', mask: '255.255.255.0', metric: 16 }]);
+
+    def('rip', {
+      name: 'RIP', title: 'RIPv2 路由更新', cat: 'base', sub: '路由信息协议 · 距离向量',
+      osi: 7, layer: 7, nodes: ['r1', 'gateway', 'r3'], seqNodes: ['r1', 'gateway', 'r3'],
+      labels: {
+        r1: { name: '路由器 R1', ip: IP_R1 },
+        gateway: { name: '路由器 R2', ip: IP_R2 },
+        r3: { name: '路由器 R3', ip: IP_R3 }
+      },
+      steps: [
+        { t: '启动请求', d: '新上线的 R1 向 224.0.0.9 请求整张路由表', at: 1 },
+        { t: '邻居应答', d: 'R2 用 Response 通告自己知道的网段与跳数', at: 2 },
+        { t: '距离向量计算', d: '收到路由后跳数 +1，选度量最小的下一跳', at: 3 },
+        { t: '周期更新', d: '每 30 秒把整张路由表重发一次', at: 4 },
+        { t: '故障与毒化', d: '链路断开时把度量置 16，触发更新抑制环路', at: 5 }
+      ],
+      desc: 'RIP 用「跳数」衡量距离：每台路由器每 30 秒把整张路由表发给邻居，邻居把跳数加 1 后挑最小的那条写入路由表。最大 15 跳，16 跳即视为不可达。',
+      tip: 'RIPv2 承载在 UDP/520，用组播 224.0.0.9，路由项里带子网掩码与下一跳，因此支持 VLSM。距离向量算法「只听邻居说」，收敛慢；要靠水平分割、毒性逆转、抑制计时器来避免路由环路。',
+      stats: [
+        { k: '承载协议', v: 'UDP / 520' },
+        { k: '组播地址', v: '224.0.0.9' },
+        { k: '度量标准', v: '跳数 (1~15)' },
+        { k: '更新周期', v: '30 s' },
+        { k: '最大跳数', v: '15（16 不可达）' }
+      ],
+      packets: [
+        P({ t: 0.000, src: IP_R1, dst: IP_RIP_MCAST, proto: 'RIP', kind: 'routing', phase: '请求路由表',
+          from: 'r1', to: 'gateway', title: 'RIPv2 Request',
+          info: 'Request · 请求完整路由表 (metric=16)', osi: [7, 4, 3, 2], layer: 7,
+          note: '路由器刚启动时不必等 30 秒：先发一个 Request，邻居会立即用 Response 回送整张路由表。',
+          layers: frame(IP_R1, IP_RIP_MCAST, 17, '17 (UDP)', udpTo(520, 520), request) }),
+        P({ t: 0.018, src: IP_R2, dst: IP_RIP_MCAST, proto: 'RIP', kind: 'update', phase: '邻居应答',
+          from: 'gateway', to: 'r1', title: 'RIPv2 Response (R2)',
+          info: 'Response · 2 routes · 10.0.23.0/24, 192.168.2.0/24', osi: [7, 4, 3, 2], layer: 7,
+          note: 'R2 通告自己知道的网段：直连的 10.0.23.0/24 度量 1，经 R3 可达的 192.168.2.0/24 度量 2 并给出下一跳。',
+          layers: frame(IP_R2, IP_RIP_MCAST, 17, '17 (UDP)', udpTo(520, 520), r2Routes, { inbound: true }) }),
+        P({ t: 0.032, src: IP_R1, dst: IP_RIP_MCAST, proto: 'RIP', kind: 'update', phase: '距离向量计算',
+          from: 'r1', to: 'gateway', title: 'RIPv2 Response (R1)',
+          info: 'Response · 2 routes · 192.168.1.0/24, 10.0.12.0/24', osi: [7, 4, 3, 2], layer: 7,
+          note: 'R1 也通告自己的直连网段。收到 R2 的路由后把跳数加 1，取度量最小者写入路由表 —— 这就是 Bellman-Ford 式距离向量。',
+          layers: frame(IP_R1, IP_RIP_MCAST, 17, '17 (UDP)', udpTo(520, 520), r1Routes) }),
+        P({ t: 30.000, src: IP_R2B, dst: IP_RIP_MCAST, proto: 'RIP', kind: 'update', phase: '周期更新',
+          from: 'gateway', to: 'r3', title: 'RIPv2 Periodic Update',
+          info: 'Response · 周期更新 (30 s) · 2 routes', osi: [7, 4, 3, 2], layer: 7,
+          note: '即使拓扑没有变化，RIP 每 30 秒也要把整张路由表重发一遍；这是它带宽开销大、收敛慢的主要原因。',
+          layers: frame(IP_R2B, IP_RIP_MCAST, 17, '17 (UDP)', udpTo(520, 520), periodic) }),
+        P({ t: 45.120, src: IP_R2, dst: IP_RIP_MCAST, proto: 'RIP', kind: 'update', phase: '故障与毒化',
+          from: 'gateway', to: 'r1', title: 'RIPv2 Triggered Update',
+          info: 'Response · 192.168.2.0/24 metric=16 (不可达)', osi: [7, 4, 3, 2], layer: 7,
+          note: 'R3 侧链路断开，R2 立即触发更新，把该网段度量置为 16（不可达），配合抑制计时器避免计数到无穷与路由环路。',
+          layers: frame(IP_R2, IP_RIP_MCAST, 17, '17 (UDP)', udpTo(520, 520), poison, { inbound: true }) })
+      ]
+    });
+  })();
+
+  /* 16 · OSPF —— 链路状态路由 */
+  (function () {
+    const h1 = OSPF_HELLO('255.255.255.0', '0.0.0.0', '0.0.0.0', []);
+    const hello1 = OSPF(1, 'Hello', IP_R1, '0.0.0.0', h1.body, h1.fields);
+    const h2 = OSPF_HELLO('255.255.255.0', IP_R2, IP_R1, [IP_R1]);
+    const hello2 = OSPF(1, 'Hello', IP_R2, '0.0.0.0', h2.body, h2.fields);
+    const lsa = ROUTER_LSA(IP_R1, [
+      { id: '10.0.12.0', data: IP_R1, type: 2, metric: 10 },
+      { id: '192.168.1.0', data: '255.255.255.0', type: 3, metric: 10 }
+    ]);
+    const lsaHead = lsa.slice(0, 20);
+    const dbd = OSPF_DBD(0x00000a1b, [lsaHead]);
+    const dd = OSPF(2, 'Database Description', IP_R1, '0.0.0.0', dbd.body, dbd.fields);
+    const lsr = OSPF_LSR([{ type: 1, id: IP_R1, adv: IP_R1 }]);
+    const req = OSPF(3, 'Link State Request', IP_R2, '0.0.0.0', lsr.body, lsr.fields);
+    const lsu = OSPF_LSU([lsa]);
+    const upd = OSPF(4, 'Link State Update', IP_R1, '0.0.0.0', lsu.body, lsu.fields);
+    const flood = OSPF(4, 'Link State Update', IP_R2B, '0.0.0.0', lsu.body, lsu.fields);
+    const ackBody = OSPF_LSACK([lsaHead]);
+    const ack = OSPF(5, 'Link State Ack', IP_R2, '0.0.0.0', ackBody.body, ackBody.fields);
+
+    def('ospf', {
+      name: 'OSPF', title: 'OSPFv2 链路状态同步', cat: 'base', sub: '开放式最短路径优先 · 链路状态',
+      osi: 3, layer: 3, nodes: ['r1', 'gateway', 'r3'], seqNodes: ['r1', 'gateway', 'r3'],
+      labels: {
+        r1: { name: '路由器 R1', ip: IP_R1 },
+        gateway: { name: '路由器 R2', ip: IP_R2 },
+        r3: { name: '路由器 R3', ip: IP_R3 }
+      },
+      steps: [
+        { t: 'Hello 发现邻居', d: '组播 224.0.0.5，双向确认后建立邻接', at: 2 },
+        { t: '交换数据库摘要', d: 'DD 只发 LSA 首部，比对 LSDB 差异', at: 3 },
+        { t: '请求缺失 LSA', d: 'LSR 列出本机缺少或过期的条目', at: 4 },
+        { t: '泛洪并确认', d: 'LSU 携带完整 LSA，逐跳用 LSAck 确认', at: 6 },
+        { t: 'SPF 计算路由', d: '以自己为根跑 Dijkstra，生成最短路径树', at: 7 }
+      ],
+      desc: 'OSPF 不走 TCP 或 UDP，而是直接封装在 IP 数据报里（协议号 89）。每台路由器把自己周边的链路状态（LSA）泛洪给整个区域，所有路由器因此拥有一致的 LSDB，再各自以自己为根运行 SPF 算法算出最短路径。',
+      tip: '链路状态算法收敛快、天然无环路，但要求区域内 LSDB 严格一致。Hello 维持邻居关系，DR / BDR 减少广播网段的邻接数量，Area 0 是骨干区域；LSA 靠序列号与老化时间区分新旧。',
+      stats: [
+        { k: 'IP 协议号', v: '89 (直接封装)' },
+        { k: '组播地址', v: '224.0.0.5 / 224.0.0.6' },
+        { k: '路由算法', v: 'Dijkstra SPF' },
+        { k: '度量标准', v: '开销 Cost（基于带宽）' },
+        { k: '报文类型', v: '5 种：Hello / DD / LSR / LSU / LSAck' }
+      ],
+      packets: [
+        P({ t: 0.000, src: IP_R1, dst: IP_OSPF_MCAST, proto: 'OSPF', kind: 'routing', phase: '邻居发现',
+          from: 'r1', to: 'gateway', title: 'OSPF Hello (R1)',
+          info: 'Hello · Router-ID 10.0.12.1 · DR 未知', osi: [3, 2], layer: 3,
+          note: 'R1 在接口上向 AllSPFRouters 组播 224.0.0.5 发 Hello，此时还没有发现任何邻居，DR / BDR 均为 0。',
+          layers: ospfFrame(IP_R1, IP_OSPF_MCAST, hello1) }),
+        P({ t: 0.012, src: IP_R2, dst: IP_OSPF_MCAST, proto: 'OSPF', kind: 'routing', phase: '邻居发现',
+          from: 'gateway', to: 'r1', title: 'OSPF Hello (R2)',
+          info: 'Hello · 已发现邻居 10.0.12.1 · DR=10.0.12.2', osi: [3, 2], layer: 3,
+          note: 'R2 的 Hello 里列出了 R1；双方都在对方的邻居列表中看到自己后进入 2-Way，随后选举 DR / BDR 并开始同步数据库。',
+          layers: ospfFrame(IP_R2, IP_OSPF_MCAST, hello2) }),
+        P({ t: 0.035, src: IP_R1, dst: IP_R2, proto: 'OSPF', kind: 'routing', phase: '数据库同步',
+          from: 'r1', to: 'gateway', title: 'OSPF Database Description',
+          info: 'DD · I/M/MS=0x07 · 1 条 LSA 摘要', osi: [3, 2], layer: 3,
+          note: '邻接建立后先交换 DD 报文：只发 LSA 首部（摘要），接收方比对自己的 LSDB，找出缺失或更旧的条目。',
+          layers: ospfFrame(IP_R1, IP_R2, dd) }),
+        P({ t: 0.049, src: IP_R2, dst: IP_R1, proto: 'OSPF', kind: 'routing', phase: '请求缺失 LSA',
+          from: 'gateway', to: 'r1', title: 'OSPF Link State Request',
+          info: 'LSR · 请求 Type 1 Router-LSA 10.0.12.1', osi: [3, 2], layer: 3,
+          note: 'R2 用「LS 类型 + LS ID + 通告路由器」三元组精确请求自己缺少的那条 LSA 的完整内容。',
+          layers: ospfFrame(IP_R2, IP_R1, req) }),
+        P({ t: 0.061, src: IP_R1, dst: IP_R2, proto: 'OSPF', kind: 'update', phase: '泛洪链路状态',
+          from: 'r1', to: 'gateway', title: 'OSPF Link State Update',
+          info: 'LSU · 1 条 Router-LSA · 2 条链路', osi: [3, 2], layer: 3,
+          note: 'LSU 携带完整 LSA：链路类型、链路 ID、掩码与开销。收到后写入 LSDB，并向其它接口继续泛洪。',
+          layers: ospfFrame(IP_R1, IP_R2, upd) }),
+        P({ t: 0.074, src: IP_R2, dst: IP_R1, proto: 'OSPF', kind: 'routing', phase: '泛洪链路状态',
+          from: 'gateway', to: 'r1', title: 'OSPF Link State Ack',
+          info: 'LSAck · 确认收到 LSA 摘要', osi: [3, 2], layer: 3,
+          note: 'LSAck 显式确认收到的 LSA；未在重传间隔内收到确认就重发，保证泛洪在不可靠的 IP 之上仍然可靠。',
+          layers: ospfFrame(IP_R2, IP_R1, ack) }),
+        P({ t: 0.092, src: IP_R2B, dst: IP_R3, proto: 'OSPF', kind: 'update', phase: '泛洪链路状态',
+          from: 'gateway', to: 'r3', title: 'OSPF LSU 泛洪到 R3',
+          info: 'LSU · 向另一接口泛洪同一条 LSA', osi: [3, 2], layer: 3,
+          note: 'R2 把学到的 LSA 从其它接口继续泛洪出去，直到区域内所有路由器的 LSDB 完全一致，此时每台路由器都能独立跑出最短路径树。',
+          layers: ospfFrame(IP_R2B, IP_R3, flood) })
+      ]
+    });
+  })();
+
   /* ---------- 元信息 ---------- */
-  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic'];
+  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf'];
   const CATEGORIES = [
     { id: 'all', zh: '全部', en: 'All' },
     { id: 'base', zh: '基础', en: 'Core' },
@@ -920,10 +1214,10 @@
   ];
   const KIND_COLORS = {
     dns: '#2f6fd0', tcp: '#0f9c9c', request: '#e8a317', response: '#7c4dd6',
-    ack: '#a5b0c7', tls: '#d24b6a'
+    ack: '#a5b0c7', tls: '#d24b6a', routing: '#2f8fd0', update: '#8a5cd6'
   };
-  const KIND_ZH = { dns: 'DNS', tcp: 'TCP', request: '请求', response: '响应', ack: '纯 ACK', tls: 'TLS' };
-  const KIND_EN = { dns: 'DNS', tcp: 'TCP', request: 'Request', response: 'Response', ack: 'Bare ACK', tls: 'TLS' };
+  const KIND_ZH = { dns: 'DNS', tcp: 'TCP', request: '请求', response: '响应', ack: '纯 ACK', tls: 'TLS', routing: '路由报文', update: '路由更新' };
+  const KIND_EN = { dns: 'DNS', tcp: 'TCP', request: 'Request', response: 'Response', ack: 'Bare ACK', tls: 'TLS', routing: 'Routing', update: 'Route update' };
   const OSI_NAMES = ['物理层', '数据链路层', '网络层', '传输层', '会话层', '表示层', '应用层'];
 
   global.ProtocolData = {

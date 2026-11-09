@@ -45,6 +45,7 @@
       nodeClient: '客户端', nodeGateway: '网关 / 路由器', nodeDns: 'DNS 服务器',
       nodeDhcp: 'DHCP 服务器', nodeWeb: 'Web 服务器', nodeTarget: '目标主机',
       nodeMail: '邮件服务器', nodeFtp: 'FTP 服务器',
+      nodeR1: '路由器 R1', nodeR3: '路由器 R3',
       seqTitle: '协议时序 · 纵向为时间', detailTitle: '展开报文',
       statAll: '全部', statBase: '基础', statApp: '应用', statSec: '安全',
       schoolShort: '浙江工商大学', authorShort: '邢建国'
@@ -67,6 +68,7 @@
       nodeClient: 'Client', nodeGateway: 'Gateway / Router', nodeDns: 'DNS Server',
       nodeDhcp: 'DHCP Server', nodeWeb: 'Web Server', nodeTarget: 'Remote Host',
       nodeMail: 'Mail Server', nodeFtp: 'FTP Server',
+      nodeR1: 'Router R1', nodeR3: 'Router R3',
       seqTitle: 'Sequence diagram · vertical = time', detailTitle: 'Inspect packet',
       statAll: 'All', statBase: 'Core', statApp: 'App', statSec: 'Secure',
       schoolShort: 'Zhejiang Gongshang Univ.', authorShort: 'Jianguo Xing'
@@ -86,7 +88,10 @@
     '应答格式': 'Reply format', '结束标记': 'End marker', '控制端口': 'Control port', '数据端口': 'Data port',
     '连接数量': 'TCP connections', '传输模式': 'Transfer mode', '承载协议': 'Runs over', '首次建连': 'First handshake',
     '加密': 'Encryption', '队头阻塞': 'Head-of-line blocking', '当前报文': 'Current packet',
-    '报文总数': 'Packets', '已用时间': 'Elapsed'
+    '报文总数': 'Packets', '已用时间': 'Elapsed',
+    '组播地址': 'Multicast', '度量标准': 'Metric', '更新周期': 'Update interval',
+    '最大跳数': 'Max hops', 'IP 协议号': 'IP protocol', '路由算法': 'Algorithm',
+    '报文类型': 'Packet types', '建连开销': 'Setup cost', '传输层': 'Transport'
   };
   const T = k => (I18N[state.lang] || I18N.zh)[k] || k;
   const trStat = k => state.lang === 'en' ? (STAT_EN[k] || k) : k;
@@ -95,7 +100,8 @@
     http: '页面已送达', https: '加密页面已送达', dns: '域名已解析', tcp: '连接已建立',
     udp: '数据报已送达', ip: '分组已投递', arp: '地址已解析', icmp: '目标可达',
     dhcp: 'IP 地址已分配', tls: '安全通道已建立', websocket: '实时通道已建立',
-    smtp: '邮件已投递', ftp: '文件列表已送达', quic: 'HTTP/3 响应已送达'
+    smtp: '邮件已投递', ftp: '文件列表已送达', quic: 'HTTP/3 响应已送达',
+    rip: '路由表已收敛', ospf: '链路状态已同步'
   };
   const sc = () => D.scenarios[state.scenario];
   const pk = () => sc().packets[state.index] || null;
@@ -104,15 +110,19 @@
   const POS = {
     url: { x: 218, y: 92 }, client: { x: 245, y: 352 }, gateway: { x: 522, y: 182 },
     dns: { x: 838, y: 96 }, dhcp: { x: 838, y: 96 }, web: { x: 838, y: 350 },
-    target: { x: 838, y: 350 }, mail: { x: 838, y: 350 }, ftp: { x: 838, y: 350 }
+    target: { x: 838, y: 350 }, mail: { x: 838, y: 350 }, ftp: { x: 838, y: 350 },
+    r1: { x: 220, y: 300 }, r3: { x: 820, y: 300 }
   };
+  const ROUTER_NODES = ['gateway', 'r1', 'r3'];
   const NODE_NAMES = {
     client: 'nodeClient', gateway: 'nodeGateway', dns: 'nodeDns', dhcp: 'nodeDhcp',
-    web: 'nodeWeb', target: 'nodeTarget', mail: 'nodeMail', ftp: 'nodeFtp'
+    web: 'nodeWeb', target: 'nodeTarget', mail: 'nodeMail', ftp: 'nodeFtp',
+    r1: 'nodeR1', r3: 'nodeR3'
   };
   const NODE_IPS = {
     client: D.ipClient, gateway: '192.168.1.1', dns: D.ipDns, dhcp: '192.168.1.1',
-    web: D.ipWeb, target: D.ipWeb, mail: '198.51.100.25', ftp: '198.51.100.40'
+    web: D.ipWeb, target: D.ipWeb, mail: '198.51.100.25', ftp: '198.51.100.40',
+    r1: '10.0.12.1', r3: '10.0.23.3'
   };
 
   function isoFaces(w, h, d) {
@@ -323,12 +333,13 @@
       const pos = POS[key];
       if (!pos) return '';
       const inner = key === 'url' ? urlSvg(s) :
-        (key === 'client' ? laptopSvg() : serverSvg(key));
+        (key === 'client' ? laptopSvg() : serverSvg(ROUTER_NODES.indexOf(key) >= 0 ? 'gateway' : key));
       const label = key === 'url' ? '' : nodeLabel(key, s);
       return '<g class="node" id="node_' + key + '" transform="translate(' + pos.x + ',' + pos.y + ')">' +
         inner + label + '</g>';
     }).join('');
-    $('canvasCorner').textContent = state.index >= 0 ? (pk().src + '  →  ' + pk().dst) : D.ipClient;
+    const fallback = s.packets[0] ? s.packets[0].src : D.ipClient;
+    $('canvasCorner').textContent = state.index >= 0 ? (pk().src + '  →  ' + pk().dst) : fallback;
   }
 
   function renderNetworkState() {
@@ -343,14 +354,15 @@
       const el = $('link_' + key);
       if (el) el.classList.add('active');
     }
-    $('canvasCorner').textContent = p ? (p.src + '  →  ' + p.dst) : D.ipClient;
+    const s = sc();
+    $('canvasCorner').textContent = p ? (p.src + '  →  ' + p.dst) : (s.packets[0] ? s.packets[0].src : D.ipClient);
   }
 
   /* ---------------- 渲染：时序图 ---------------- */
   function renderSequence() {
     const s = sc(), svg = $('sequenceSvg');
     const life = s.nodes.filter(n => n !== 'url' && n !== 'gateway' && n !== 'client');
-    const cols = ['client'].concat(life.slice(0, 3));
+    const cols = s.seqNodes || ['client'].concat(life.slice(0, 3));
     const x0 = 170, x1 = 870;
     const X = {};
     cols.forEach((c, i) => { X[c] = cols.length === 1 ? 520 : x0 + (x1 - x0) * i / (cols.length - 1); });
