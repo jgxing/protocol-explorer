@@ -89,7 +89,28 @@
       xlPhBoot: '各自称根', xlPhElect: '根桥选举', xlPhRootPort: '选根端口', xlPhDesignated: '选指定端口',
       xlPhBlock: '阻塞冗余端口', xlPhStable: '稳定转发', xlPhFail: '链路故障', xlPhDetect: '感知变化 · TCN',
       xlPhTcn: '根桥通告 TC', xlPhConverge: '重新收敛', xlPhFinal: '新树稳定',
-      xlNoFrame: '尚未发送帧', xlStepDone: '本轮实验结束，可重置后换参数再跑', xlTimeline: '步骤时间轴（点击跳转）'
+      xlNoFrame: '尚未发送帧', xlStepDone: '本轮实验结束，可重置后换参数再跑', xlTimeline: '步骤时间轴（点击跳转）',
+      cdLabView: 'CSMA/CD 实验', wfLabView: 'CSMA/CA 实验',
+      cdTitle: 'CSMA/CD 共享介质实验台', wfTitle: '802.11 CSMA/CA 实验台',
+      cdNote: '下方抓包表记录默认参数（2 站点 / 64 B 最短帧 / BEB）下的一次过程；此处改参数会重算时隙推演，抓包表只做对应定位。',
+      wfNote: '下方抓包表记录一次完整接入与数据交换；此处改参数会重算 DIFS / 退避 / RTS-CTS / ACK 的时隙推演。',
+      cdChart: '共享总线时隙推演 · 每行一个站点 · 点击任一列可跳转',
+      wfChart: '无线信道时隙推演 · NAV 为虚拟载波侦听 · 点击任一列可跳转',
+      cdCfgHosts: '争用站点数', cdCfgFrame: '帧长', cdCfgBackoff: '退避算法',
+      cdFrameMin: '64 B · 合法最短帧', cdFrameShort: '40 B · 违规过短帧', cdFrameLong: '1518 B · 最大帧',
+      cdBeb: 'BEB · 指数退避', cdFixed: '固定窗口 (0~3)', cdNone: '不退避（立即重发）',
+      cdMetricStep: '当前时隙', cdMetricColl: '冲突次数', cdMetricSucc: '成功帧', cdMetricWin: '退避窗口',
+      cdMetricFrame: '帧长 / 争用期', cdMetricAttempt: '重传次数', cdFrameCheck: '最短帧长校验',
+      cdOk: '≥ 512 bit · 冲突可检出', cdBad: '< 512 bit · 会出现迟到冲突',
+      cdTable: '站点退避状态', cdThSite: '站点', cdThRetry: '重传', cdThK: 'k', cdThR: 'r', cdThState: '状态',
+      cdMedium: '介质', cdMinLine: '争用期 512 bit = 51.2 μs = 64 B',
+      wfCfgStations: '站点数', wfCfgRts: 'RTS / CTS', wfCfgHidden: '隐藏节点', wfCfgCw: '竞争窗口',
+      wfRtsOff: '关闭（直接发 DATA）', wfRtsOn: '开启（先预约信道）',
+      wfHiddenOff: '无（彼此可听）', wfHiddenOn: '有（互相听不到）',
+      wfCw15: 'CW 15 · 4 槽示意', wfCw63: 'CW 63 · 8 槽示意',
+      wfMetricPhase: '当前阶段', wfMetricNav: 'NAV 预留', wfMetricCw: '当前 CW', wfMetricIfs: 'DIFS / SIFS',
+      wfTable: '站点 / AP 状态', wfThSite: '节点', wfThBackoff: '退避', wfThNav: 'NAV', wfThState: '状态',
+      wfMedium: '信道', wfNavLine: 'NAV · 虚拟载波侦听'
     },
     en: {
       tagline: 'Learn how the Internet works', learning: 'Studying', layer: 'App layer', progress: 'Progress',
@@ -153,7 +174,28 @@
       xlPhBoot: 'All claim root', xlPhElect: 'Root election', xlPhRootPort: 'Root ports', xlPhDesignated: 'Designated ports',
       xlPhBlock: 'Blocking', xlPhStable: 'Steady state', xlPhFail: 'Link failure', xlPhDetect: 'Detection · TCN',
       xlPhTcn: 'Root TC flood', xlPhConverge: 'Reconvergence', xlPhFinal: 'New tree stable',
-      xlNoFrame: 'No frame yet', xlStepDone: 'Run complete — reset and try another configuration', xlTimeline: 'Step timeline (click to jump)'
+      xlNoFrame: 'No frame yet', xlStepDone: 'Run complete — reset and try another configuration', xlTimeline: 'Step timeline (click to jump)',
+      cdLabView: 'CSMA/CD Lab', wfLabView: 'CSMA/CA Lab',
+      cdTitle: 'CSMA/CD Shared Medium Lab', wfTitle: '802.11 CSMA/CA Lab',
+      cdNote: 'The capture table below records one default run (2 stations / 64 B minimum frame / BEB). Changing parameters here recomputes the slot timeline; the table only jumps to the matching frame.',
+      wfNote: 'The capture table below shows one full association and data exchange. Changing parameters here recomputes the DIFS / backoff / RTS-CTS / ACK timeline.',
+      cdChart: 'Shared bus slot timeline · one row per station · click any column to jump',
+      wfChart: 'Wireless channel timeline · NAV = virtual carrier sensing · click any column to jump',
+      cdCfgHosts: 'Contending stations', cdCfgFrame: 'Frame length', cdCfgBackoff: 'Backoff algorithm',
+      cdFrameMin: '64 B · legal minimum', cdFrameShort: '40 B · illegal runt', cdFrameLong: '1518 B · maximum',
+      cdBeb: 'BEB (exponential)', cdFixed: 'Fixed window (0–3)', cdNone: 'No backoff (retry at once)',
+      cdMetricStep: 'Current slot', cdMetricColl: 'Collisions', cdMetricSucc: 'Frames delivered', cdMetricWin: 'Backoff window',
+      cdMetricFrame: 'Frame / contention', cdMetricAttempt: 'Retries', cdFrameCheck: 'Minimum frame check',
+      cdOk: '≥ 512 bit · collision detectable', cdBad: '< 512 bit · late collision',
+      cdTable: 'Station backoff state', cdThSite: 'Station', cdThRetry: 'Retry', cdThK: 'k', cdThR: 'r', cdThState: 'State',
+      cdMedium: 'Medium', cdMinLine: 'Contention period 512 bit = 51.2 μs = 64 B',
+      wfCfgStations: 'Stations', wfCfgRts: 'RTS / CTS', wfCfgHidden: 'Hidden node', wfCfgCw: 'Contention window',
+      wfRtsOff: 'Off (send DATA directly)', wfRtsOn: 'On (reserve the channel first)',
+      wfHiddenOff: 'None (all hear each other)', wfHiddenOn: 'Present (mutually deaf)',
+      wfCw15: 'CW 15 · 4 slots', wfCw63: 'CW 63 · 8 slots',
+      wfMetricPhase: 'Current stage', wfMetricNav: 'NAV reserved', wfMetricCw: 'Current CW', wfMetricIfs: 'DIFS / SIFS',
+      wfTable: 'Station / AP state', wfThSite: 'Node', wfThBackoff: 'Backoff', wfThNav: 'NAV', wfThState: 'State',
+      wfMedium: 'Channel', wfNavLine: 'NAV · virtual carrier sensing'
     }
   };
   const STAT_EN = {
@@ -181,7 +223,11 @@
     '工作层次': 'Layer', '学习依据': 'Learns from', '转发依据': 'Forwards by',
     '三种动作': 'Three actions', '默认老化': 'Default aging', '表项容量': 'Table capacity',
     '协议标准': 'Standard', 'BPDU 组播': 'BPDU multicast', 'LLC 地址': 'LLC SAP',
-    'Bridge ID': 'Bridge ID', '链路开销': 'Link cost', 'STP 定时器': 'STP timers', '收敛时间': 'Convergence'
+    'Bridge ID': 'Bridge ID', '链路开销': 'Link cost', 'STP 定时器': 'STP timers', '收敛时间': 'Convergence',
+    '介质访问': 'Medium access', '争用期': 'Contention period', '最短帧长': 'Minimum frame',
+    '强化冲突': 'Jam signal', '退避窗口': 'Backoff window', '最大重传': 'Max retries',
+    '帧间隙': 'Interframe gap', '帧间隔': 'Interframe spaces', '竞争窗口': 'Contention window',
+    '确认机制': 'Acknowledgement', '地址字段': 'Address fields', '安全机制': 'Security', '隐藏节点': 'Hidden node'
   };
   const T = k => (I18N[state.lang] || I18N.zh)[k] || k;
   const trStat = k => state.lang === 'en' ? (STAT_EN[k] || k) : k;
@@ -192,7 +238,8 @@
     dhcp: 'IP 地址已分配', tls: '安全通道已建立', websocket: '实时通道已建立',
     smtp: '邮件已投递', ftp: '文件列表已送达', quic: 'HTTP/3 响应已送达',
     rip: '路由表已收敛', ospf: '链路状态已同步', bgp: '域间路由已收敛',
-    tcpcc: '拥塞窗口已收敛', switch: 'MAC 转发表已建立', stp: '无环生成树已建立'
+    tcpcc: '拥塞窗口已收敛', switch: 'MAC 转发表已建立', stp: '无环生成树已建立',
+    csma: '共享介质争用已完成', wifi: '无线接入与确认已完成'
   };
   const sc = () => D.scenarios[state.scenario];
   const pk = () => sc().packets[state.index] || null;
@@ -205,22 +252,25 @@
     r1: { x: 220, y: 300 }, r3: { x: 820, y: 300 },
     sw: { x: 500, y: 250 },
     ha: { x: 150, y: 96 }, hb: { x: 150, y: 410 }, hc: { x: 850, y: 96 }, hd: { x: 850, y: 410 },
-    s1: { x: 270, y: 130 }, s2: { x: 730, y: 130 }, s3: { x: 500, y: 382 }
+    s1: { x: 270, y: 130 }, s2: { x: 730, y: 130 }, s3: { x: 500, y: 382 },
+    bus: { x: 500, y: 250 }, sta: { x: 200, y: 355 }, sta2: { x: 200, y: 120 },
+    ap: { x: 500, y: 235 }, ds: { x: 840, y: 235 }
   };
-  const XL_HOST_NODES = ['ha', 'hb', 'hc', 'hd'];
+  const XL_HOST_NODES = ['ha', 'hb', 'hc', 'hd', 'sta', 'sta2'];
   const XL_SW_NODES = ['sw', 's1', 's2', 's3'];
   const ROUTER_NODES = ['gateway', 'r1', 'r3'];
   const NODE_NAMES = {
     client: 'nodeClient', gateway: 'nodeGateway', dns: 'nodeDns', dhcp: 'nodeDhcp',
     web: 'nodeWeb', target: 'nodeTarget', mail: 'nodeMail', ftp: 'nodeFtp',
     r1: 'nodeR1', r3: 'nodeR3', sw: 'nodeWeb', ha: 'nodeWeb', hb: 'nodeWeb',
-    hc: 'nodeWeb', hd: 'nodeWeb', s1: 'nodeWeb', s2: 'nodeWeb', s3: 'nodeWeb'
+    hc: 'nodeWeb', hd: 'nodeWeb', s1: 'nodeWeb', s2: 'nodeWeb', s3: 'nodeWeb',
+    bus: 'nodeWeb', sta: 'nodeWeb', sta2: 'nodeWeb', ap: 'nodeWeb', ds: 'nodeWeb'
   };
   const NODE_IPS = {
     client: D.ipClient, gateway: '192.168.1.1', dns: D.ipDns, dhcp: '192.168.1.1',
     web: D.ipWeb, target: D.ipWeb, mail: '198.51.100.25', ftp: '198.51.100.40',
     r1: '10.0.12.1', r3: '10.0.23.3', sw: '4 × 100 Mbps', s1: '', s2: '', s3: '',
-    ha: '', hb: '', hc: '', hd: ''
+    ha: '', hb: '', hc: '', hd: '', bus: '', sta: '', sta2: '', ap: '', ds: ''
   };
 
   function isoFaces(w, h, d) {
@@ -272,6 +322,30 @@
           '<text class="node-tag" x="' + (x + pw / 2) + '" y="14" text-anchor="middle">P' + (i + 1) + '</text>' +
           '<path class="node-faint" d="M' + x + ',24 l20,-10"/>';
       }).join('');
+  }
+  /* 共享同轴总线 / 集线器：一条贯穿的总线 + 四个抽头 */
+  function busSvg() {
+    return '' +
+      '<rect class="node-shape" x="-112" y="-38" width="224" height="76" rx="8"/>' +
+      '<path class="node-detail" style="stroke-width:4" d="M-98,0 h196"/>' +
+      '<text class="node-tag" x="0" y="-22" text-anchor="middle">SHARED BUS · 10 Mbps</text>' +
+      [-72, -24, 24, 72].map((x, i) =>
+        '<circle class="node-glow" cx="' + x + '" cy="0" r="5"/>' +
+        '<path class="node-detail" d="M' + x + ',6 v14"/>' +
+        '<text class="node-tag" x="' + x + '" y="30" text-anchor="middle">P' + (i + 1) + '</text>').join('');
+  }
+  /* 无线 AP：机身上两根天线 + 无线电波弧 */
+  function apSvg() {
+    return '' +
+      '<path class="node-detail" style="stroke-width:2" d="M-26,-44 q10,-14 20,0 M-4,-44 q10,-14 20,0"/>' +
+      '<path class="node-faint" d="M-34,-58 a42,42 0 0 1 68,0 M-46,-70 a58,58 0 0 1 92,0"/>' +
+      '<path class="node-detail" d="M-16,-44 v14 M16,-44 v14"/>' +
+      '<rect class="node-shape" x="-66" y="-30" width="132" height="60" rx="7"/>' +
+      '<rect class="node-detail" x="-56" y="-20" width="112" height="40" rx="3"/>' +
+      '<text class="node-tag" x="0" y="-4" text-anchor="middle">AP · BSSID</text>' +
+      '<circle class="node-glow" cx="-38" cy="10" r="3.5"/><circle class="node-glow" cx="-24" cy="10" r="3.5"/>' +
+      '<circle class="node-glow" cx="-10" cy="10" r="3.5"/>' +
+      '<path class="node-faint" d="M10,10 h44"/>';
   }
   function urlSvg(scene) {
     const text = scene.url || '';
@@ -441,8 +515,10 @@
         if (p.from !== p.to && !pairs.some(x => x.key === key)) pairs.push({ key, a: p.from, b: p.to });
       });
     }
+    const wirelessKeys = (s.wirelessLinks || []).map(l => l.slice().sort().join('|'));
     $('linkLayer').innerHTML = pairs.map(x =>
-      '<path class="link-line" id="link_' + x.key.replace('|', '_') + '" data-a="' + x.a + '" data-b="' + x.b +
+      '<path class="link-line' + (wirelessKeys.indexOf(x.key) >= 0 ? ' wireless' : '') +
+      '" id="link_' + x.key.replace('|', '_') + '" data-a="' + x.a + '" data-b="' + x.b +
       '" d="' + linkPath(x.a, x.b) + '" marker-end="url(#arrowHeadDim)"/>'
     ).join('');
 
@@ -451,9 +527,11 @@
       const pos = (s.pos && s.pos[key]) || POS[key];
       if (!pos) return '';
       const inner = key === 'url' ? urlSvg(s) :
-        (key === 'client' || XL_HOST_NODES.indexOf(key) >= 0) ? laptopSvg() :
-          XL_SW_NODES.indexOf(key) >= 0 ? switchSvg(key === 'sw' ? 4 : (key === 's2' ? 2 : 3)) :
-            serverSvg(ROUTER_NODES.indexOf(key) >= 0 ? 'gateway' : key);
+        key === 'bus' ? busSvg() :
+          key === 'ap' ? apSvg() :
+            (key === 'client' || XL_HOST_NODES.indexOf(key) >= 0) ? laptopSvg() :
+              XL_SW_NODES.indexOf(key) >= 0 ? switchSvg(key === 'sw' ? 4 : (key === 's2' ? 2 : 3)) :
+                serverSvg(ROUTER_NODES.indexOf(key) >= 0 ? 'gateway' : key);
       const label = key === 'url' ? '' : nodeLabel(key, s);
       return '<g class="node" id="node_' + key + '" transform="translate(' + pos.x + ',' + pos.y + ')">' +
         inner + label + '</g>';
@@ -767,9 +845,10 @@
       '<option value="' + esc(x.v) + '"' + (String(lab.cfg[key]) === String(x.v) ? ' selected' : '') +
       '>' + esc(x.t) + '</option>').join('') + '</select>';
   }
-  function xlCtrls(items) {
-    return '<div class="lab-ctrl">' + items.map(it =>
-      '<label>' + esc(it.k) + xlOpts(it.key, it.list) + '</label>').join('') + '</div>';
+  function xlCtrls(items, wideLast) {
+    return '<div class="lab-ctrl">' + items.map((it, i) =>
+      '<label' + (wideLast && i === items.length - 1 ? ' class="wide"' : '') + '>' +
+      esc(it.k) + xlOpts(it.key, it.list) + '</label>').join('') + '</div>';
   }
   function xlButtons() {
     return '<div class="lab-btns">' +
@@ -1095,6 +1174,277 @@
       (lab.at >= rs.length ? '<div class="lab-empty">' + esc(T('xlStepDone')) + '</div>' : '');
   }
 
+  /* ---------------- CSMA/CD 与 802.11 共用：时隙泳道图 ---------------- */
+  const lang = () => state.lang === 'en' ? 'en' : 'zh';
+  const ph = (map, k) => (map[k] || { zh: k, en: k })[lang()];
+  const CD_PHASE = {
+    sense: { zh: '载波侦听', en: 'Carrier sense' }, tx: { zh: '发送帧', en: 'Transmitting' },
+    collision: { zh: '冲突检测', en: 'Collision' }, jam: { zh: '强化冲突', en: 'Jam' },
+    backoff: { zh: '退避', en: 'Backoff' }, slot: { zh: '空闲时隙', en: 'Idle slot' },
+    success: { zh: '发送成功', en: 'Delivered' }, late: { zh: '迟到冲突', en: 'Late collision' },
+    giveup: { zh: '重传放弃', en: 'Give up' }, done: { zh: '本轮结束', en: 'Complete' }
+  };
+  const WF_PHASE = {
+    difs: { zh: '等待 DIFS', en: 'DIFS' }, backoff: { zh: '随机退避', en: 'Backoff' },
+    slot: { zh: '空闲时隙', en: 'Idle slot' }, rts: { zh: 'RTS 预约', en: 'RTS' },
+    cts: { zh: 'CTS / NAV', en: 'CTS / NAV' }, data: { zh: 'DATA 发送', en: 'DATA' },
+    tx: { zh: '隐藏节点同发', en: 'Hidden-node TX' }, collision: { zh: 'AP 处冲突', en: 'Collision at AP' },
+    timeout: { zh: 'ACK 超时', en: 'ACK timeout' }, retry: { zh: 'CW 翻倍重传', en: 'CW doubled' },
+    sifs: { zh: 'SIFS 优先', en: 'SIFS' }, success: { zh: 'ACK 确认', en: 'ACK received' },
+    done: { zh: '本轮结束', en: 'Complete' }
+  };
+  const CD_ST = {
+    sense: { c: 's-idle', zh: '侦听', en: 'SENSE' }, tx: { c: 's-tx', zh: '发送', en: 'TX' },
+    collision: { c: 's-collision', zh: '冲突', en: 'COLL' }, jam: { c: 's-jam', zh: 'JAM', en: 'JAM' },
+    backoff: { c: 's-backoff', zh: '退避', en: 'BKOFF' }, frozen: { c: 's-frozen', zh: '冻结', en: 'HOLD' },
+    success: { c: 's-success', zh: '成功', en: 'OK' }, done: { c: 's-success', zh: '完成', en: 'DONE' }
+  };
+  const WF_ST = {
+    difs: { c: 's-idle', zh: 'DIFS', en: 'DIFS' }, backoff: { c: 's-backoff', zh: '退避', en: 'BKOFF' },
+    frozen: { c: 's-frozen', zh: '冻结', en: 'HOLD' }, rts: { c: 's-tx', zh: 'RTS', en: 'RTS' },
+    nav: { c: 's-nav', zh: 'NAV', en: 'NAV' }, data: { c: 's-tx', zh: 'DATA', en: 'DATA' },
+    tx: { c: 's-tx', zh: 'DATA', en: 'DATA' }, wait: { c: 's-wait', zh: '等 ACK', en: 'W-ACK' },
+    success: { c: 's-success', zh: 'OK', en: 'OK' }, idle: { c: 's-idle', zh: '空闲', en: 'IDLE' },
+    cts: { c: 's-teal', zh: 'CTS', en: 'CTS' }, rx: { c: 's-tx', zh: 'RX', en: 'RX' },
+    ack: { c: 's-success', zh: 'ACK', en: 'ACK' }
+  };
+  const MED_ST = {
+    idle: { c: 's-idle', zh: '空闲', en: 'IDLE' }, busy: { c: 's-tx', zh: '忙', en: 'BUSY' },
+    collision: { c: 's-collision', zh: '冲突', en: 'COLL' }, jam: { c: 's-jam', zh: 'JAM', en: 'JAM' },
+    nav: { c: 's-nav', zh: 'NAV', en: 'NAV' }
+  };
+  const LANE_LEGEND_EN = ['Sense / idle', 'Transmit', 'Collision', 'Backoff / freeze', 'Jam / NAV', 'Success'];
+  const LANE_LEGEND_ZH = ['侦听 / 空闲', '发送 / 载波', '冲突', '退避 / 冻结', 'Jam / NAV', '成功'];
+
+  function laneLegend(y) {
+    const cls = ['s-idle', 's-tx', 's-collision', 's-backoff', 's-jam', 's-success'];
+    const texts = state.lang === 'en' ? LANE_LEGEND_EN : LANE_LEGEND_ZH;
+    let x = 16;
+    return texts.map((t, i) => {
+      const s = '<rect class="lane-cell ' + cls[i] + ' on" x="' + x + '" y="' + (y - 8) +
+        '" width="12" height="10" rx="2"/>' +
+        '<text class="xl-tick" x="' + (x + 16) + '" y="' + (y + 1) + '">' + esc(t) + '</text>';
+      x += 112;
+      return s;
+    }).join('');
+  }
+
+  function laneChart(rs, o) {
+    const n = rs.length, x0 = 76, x1 = 704, W = x1 - x0, gap = 2;
+    const cw = Math.max(10, Math.min(56, (W - gap * (n - 1)) / n));
+    const used = cw * n + gap * (n - 1);
+    const sx = x0 + (W - used) / 2;
+    const top = 58, rh = 34, ch = 27;
+    let out = '<text class="xl-chart-title" x="16" y="18">' + esc(o.title) + '</text>' +
+      '<text class="xl-tick" x="16" y="34">' + esc(o.sub) + '</text>';
+    rs.forEach((r, i) => {
+      out += '<text class="lane-ruler' + (r.r === lab.at ? ' cur' : '') + '" x="' +
+        (sx + i * (cw + gap) + cw / 2) + '" y="' + (top - 7) + '" text-anchor="middle">' + r.r + '</text>';
+    });
+    o.lanes.forEach((ln, li) => {
+      const y = top + li * rh;
+      out += '<text class="lane-name" x="16" y="' + (y + ch / 2 + 3.5) + '">' + esc(ln.label) + '</text>';
+      out += '<rect class="lane-bg' + (ln.medium ? ' med' : '') + '" x="' + x0 + '" y="' + y +
+        '" width="' + W + '" height="' + ch + '" rx="3"/>';
+      rs.forEach((r, i) => {
+        const cell = ln.cell(r) || { c: 's-idle', t: '' };
+        const bx = sx + i * (cw + gap);
+        out += '<g class="lane-g" data-lab-r="' + r.r + '">' +
+          '<rect class="lane-cell ' + cell.c + (r.r <= lab.at ? ' on' : '') + (r.r === lab.at ? ' now' : '') +
+          '" x="' + bx + '" y="' + y + '" width="' + cw + '" height="' + ch + '" rx="2"/>' +
+          (cw >= 22 ? '<text class="lane-cell-t" x="' + (bx + cw / 2) + '" y="' + (y + ch / 2 + 2.8) +
+            '" text-anchor="middle">' + esc(cell.t || '') + '</text>' : '') + '</g>';
+      });
+    });
+    out += o.footer(top + o.lanes.length * rh + 6);
+    out += xlTimeline(rs, 16, 336, 688, 24);
+    return out;
+  }
+  function laneBadge(text, color) {
+    return '<rect class="xl-badge" x="452" y="30" width="248" height="26" rx="5" style="stroke:' + color + '"/>' +
+      '<text class="xl-badge-t" x="576" y="47" text-anchor="middle" style="fill:' + color + '">' +
+      esc(text) + '</text>';
+  }
+
+  /* ---------------- CSMA/CD 实验：共享总线时隙推演 ---------------- */
+  function cdChartHTML(rs) {
+    const L = lang(), cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const names = rs[0].names;
+    const lanes = names.map(n => ({
+      label: (L === 'en' ? 'Station ' : '站点 ') + n,
+      cell: r => {
+        const s = r.st[n] || { s: 'sense', remain: 0 };
+        const m = CD_ST[s.s] || CD_ST.sense;
+        return { c: m.c, t: (s.s === 'backoff' || s.s === 'frozen') ? 'r' + s.remain : m[L] };
+      }
+    }));
+    lanes.push({
+      label: T('cdMedium'), medium: true,
+      cell: r => { const m = MED_ST[r.bus] || MED_ST.idle; return { c: m.c, t: m[L] }; }
+    });
+    return laneChart(rs, {
+      title: T('cdChart'),
+      sub: (L === 'en' ? 'Step ' : '步骤 ') + (cur ? cur.r : 0) + ' / ' + rs.length +
+        '  ·  t = ' + (cur ? cur.t : 0) + ' μs  ·  ' + (cur ? ph(CD_PHASE, cur.phase) : T('labReady')),
+      lanes: lanes,
+      footer: y => {
+        const fi = D.cdFrameInfo[lab.cfg.frame] || D.cdFrameInfo.min;
+        const maxUs = Math.max(51.2, fi.txUs), bw = 410, bx = 76;
+        let o = '';
+        o += '<rect class="lane-bar-bg" x="' + bx + '" y="' + (y - 9) + '" width="' + bw + '" height="11" rx="3"/>';
+        o += '<rect class="lane-bar-c" x="' + bx + '" y="' + (y - 9) + '" width="' +
+          (bw * 51.2 / maxUs) + '" height="11" rx="3"/>';
+        o += '<rect class="lane-bar-bg" x="' + bx + '" y="' + (y + 6) + '" width="' + bw + '" height="11" rx="3"/>';
+        o += '<rect class="lane-bar-f' + (fi.bytes < 64 ? ' bad' : '') + '" x="' + bx + '" y="' + (y + 6) +
+          '" width="' + (bw * fi.txUs / maxUs) + '" height="11" rx="3"/>';
+        o += '<text class="xl-tick" x="' + (bx + bw + 8) + '" y="' + y + '">' +
+          esc(L === 'en' ? 'contention 51.2 μs' : '争用期 51.2 μs') + '</text>';
+        o += '<text class="xl-tick" x="' + (bx + bw + 8) + '" y="' + (y + 15) + '">' +
+          esc(fi.bytes + ' B / ' + fi.txUs + ' μs') + '</text>';
+        o += '<text class="xl-tick" x="16" y="' + (y + 30) + '">' + esc(T('cdMinLine')) + '</text>';
+        o += laneLegend(y + 50);
+        return o + laneBadge(cur ? ph(CD_PHASE, cur.phase) : T('labReady'),
+          cur && ['collision', 'late', 'giveup'].indexOf(cur.phase) >= 0 ? 'var(--red)' :
+            (cur && cur.phase === 'success' ? 'var(--green)' : 'var(--blue)'));
+      }
+    });
+  }
+
+  function cdSideHTML(rs) {
+    const L = lang(), cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const fi = D.cdFrameInfo[lab.cfg.frame] || D.cdFrameInfo.min;
+    const names = rs[0].names;
+    const rows = names.map(n => {
+      const s = cur ? cur.st[n] : { attempt: 0, k: 0, remain: 0, s: 'sense' };
+      return '<tr><td>' + esc(n) + '</td><td>' + s.attempt + '</td><td>' + s.k + '</td><td>' + s.remain +
+        '</td><td>' + esc((CD_ST[s.s] || CD_ST.sense)[L]) + '</td></tr>';
+    }).join('');
+    const logs = rs.slice(0, lab.at).map(x => ({
+      r: x.r, badge: 'S' + x.r, text: ph(CD_PHASE, x.phase) + ' · t = ' + x.t + ' μs',
+      evt: ['collision', 'late', 'giveup', 'jam'].indexOf(x.phase) >= 0
+    }));
+    const k = cur ? cur.st[names[0]].k : 0;
+    const winTxt = !cur ? '—' : (lab.cfg.backoff === 'beb' ? '2^' + k + ' = ' + Math.pow(2, k) :
+      (lab.cfg.backoff === 'fixed' ? '0~3' : '0'));
+    return '<div class="lab-panel-title">' + esc(T('cdTitle')) + '</div>' +
+      '<div class="lab-note">' + esc(T('cdNote')) + '</div>' +
+      xlCtrls([
+        { k: T('cdCfgHosts'), key: 'hosts', list: [2, 3, 4].map(v => ({ v: v, t: v + (L === 'en' ? ' stations' : ' 个站点') })) },
+        { k: T('cdCfgFrame'), key: 'frame', list: [
+          { v: 'min', t: T('cdFrameMin') }, { v: 'short', t: T('cdFrameShort') }, { v: 'long', t: T('cdFrameLong') }] },
+        { k: T('cdCfgBackoff'), key: 'backoff', list: [
+          { v: 'beb', t: T('cdBeb') }, { v: 'fixed', t: T('cdFixed') }, { v: 'none', t: T('cdNone') }] }
+      ], true) +
+      xlButtons() +
+      '<div class="lab-metrics">' +
+        xlMetric(T('cdMetricStep'), (cur ? cur.r : 0) + ' / ' + rs.length) +
+        xlMetric(T('cdMetricColl'), cur ? cur.collisions : 0) +
+        xlMetric(T('cdMetricSucc'), cur ? cur.successes : 0) +
+        xlMetric(T('cdMetricWin'), winTxt) +
+        xlMetric(T('cdMetricFrame'), fi.bytes + ' B / ' + fi.txUs + ' μs') +
+        xlMetric(T('cdMetricAttempt'), cur ? cur.attempts : 0) +
+        xlMetric(T('cdFrameCheck'), fi.bytes >= 64 ? T('cdOk') : T('cdBad'), true) +
+      '</div>' +
+      '<div class="xl-table-title">' + esc(T('cdTable')) + '</div>' +
+      '<table class="xl-table"><thead><tr><th>' + esc(T('cdThSite')) + '</th><th>' + esc(T('cdThRetry')) +
+        '</th><th>' + esc(T('cdThK')) + '</th><th>' + esc(T('cdThR')) + '</th><th>' + esc(T('cdThState')) +
+        '</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      xlLogs(logs) +
+      (lab.at >= rs.length ? '<div class="lab-empty">' + esc(T('xlStepDone')) + '</div>' : '');
+  }
+
+  /* ---------------- 802.11 CSMA/CA 实验：无线信道时隙推演 ---------------- */
+  function wfChartHTML(rs) {
+    const L = lang(), cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const names = rs[0].names;
+    const stateCell = key => r => {
+      const s = r.st[key] || { s: 'idle', remain: 0 };
+      const m = WF_ST[s.s] || WF_ST.idle;
+      return { c: m.c, t: (s.s === 'backoff' || s.s === 'frozen') ? 'r' + s.remain : m[L] };
+    };
+    const lanes = names.map(n => ({ label: n, cell: stateCell(n) }));
+    lanes.push({ label: 'AP', cell: stateCell('AP') });
+    lanes.push({
+      label: T('wfMedium'), medium: true,
+      cell: r => { const m = MED_ST[r.medium] || MED_ST.idle; return { c: m.c, t: m[L] }; }
+    });
+    return laneChart(rs, {
+      title: T('wfChart'),
+      sub: (L === 'en' ? 'Step ' : '步骤 ') + (cur ? cur.r : 0) + ' / ' + rs.length +
+        '  ·  t = ' + (cur ? cur.t : 0) + ' μs  ·  ' + (cur ? ph(WF_PHASE, cur.phase) : T('labReady')),
+      lanes: lanes,
+      footer: y => {
+        const segDefs = [
+          { k: 'difs', w: 92, label: 'DIFS' },
+          { k: 'backoff', w: 128, label: 'BACKOFF' },
+          { k: 'data', w: 176, label: cur && cur.rtsOn ? 'RTS/CTS + DATA' : 'DATA' },
+          { k: 'sifs', w: 74, label: 'SIFS' },
+          { k: 'ack', w: 92, label: 'ACK' }
+        ];
+        const SEG_OF = { difs: 0, backoff: 1, slot: 1, rts: 2, cts: 2, data: 2,
+          tx: 2, collision: 2, timeout: 2, retry: 2, sifs: 3, success: 4, done: 4 };
+        const active = cur && SEG_OF[cur.phase] != null ? SEG_OF[cur.phase] : -1;
+        let o = '', x = 76;
+        segDefs.forEach((s, i) => {
+          o += '<rect class="lane-seg' + (i === active ? ' on' : '') + '" x="' + x + '" y="' + (y - 9) +
+            '" width="' + (s.w - 3) + '" height="18" rx="3"/>';
+          o += '<text class="lane-seg-t" x="' + (x + (s.w - 3) / 2) + '" y="' + (y + 3.5) +
+            '" text-anchor="middle">' + esc(s.label) + '</text>';
+          x += s.w;
+        });
+        o += '<text class="xl-tick" x="76" y="' + (y + 24) + '">' +
+          esc('DIFS 50 μs  ·  Slot 9 μs  ·  SIFS 10 μs  ·  ACK 32 μs  ·  NAV ' + (cur ? cur.navUs : 300) + ' μs') + '</text>';
+        o += '<text class="xl-tick" x="16" y="' + (y + 40) + '">' + esc(T('wfNavLine')) + '</text>';
+        o += laneLegend(y + 58);
+        return o + laneBadge(cur ? ph(WF_PHASE, cur.phase) : T('labReady'),
+          cur && ['collision', 'timeout', 'retry'].indexOf(cur.phase) >= 0 ? 'var(--red)' :
+            (cur && cur.phase === 'success' ? 'var(--green)' : 'var(--blue)'));
+      }
+    });
+  }
+
+  function wfSideHTML(rs) {
+    const L = lang(), cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const keys = rs[0].names.concat(['AP']);
+    const rows = keys.map(n => {
+      const s = cur ? cur.st[n] : { s: n === 'AP' ? 'idle' : 'difs', remain: 0, nav: 0 };
+      return '<tr><td>' + esc(n) + '</td><td>' + s.remain + '</td><td>' + (s.nav || 0) +
+        '</td><td>' + esc((WF_ST[s.s] || WF_ST.idle)[L]) + '</td></tr>';
+    }).join('');
+    const logs = rs.slice(0, lab.at).map(x => ({
+      r: x.r, badge: 'S' + x.r, text: ph(WF_PHASE, x.phase) + ' · t = ' + x.t + ' μs',
+      evt: ['collision', 'timeout', 'retry', 'cts'].indexOf(x.phase) >= 0
+    }));
+    return '<div class="lab-panel-title">' + esc(T('wfTitle')) + '</div>' +
+      '<div class="lab-note">' + esc(T('wfNote')) + '</div>' +
+      xlCtrls([
+        { k: T('wfCfgStations'), key: 'stations', list: [
+          { v: 2, t: '2 ' + (L === 'en' ? 'stations' : '个站点') }, { v: 3, t: '3 ' + (L === 'en' ? 'stations' : '个站点') }] },
+        { k: T('wfCfgRts'), key: 'rts', list: [
+          { v: 'off', t: T('wfRtsOff') }, { v: 'on', t: T('wfRtsOn') }] },
+        { k: T('wfCfgHidden'), key: 'hidden', list: [
+          { v: 'off', t: T('wfHiddenOff') }, { v: 'on', t: T('wfHiddenOn') }] },
+        { k: T('wfCfgCw'), key: 'cw', list: [
+          { v: 'cw15', t: T('wfCw15') }, { v: 'cw63', t: T('wfCw63') }] }
+      ]) +
+      xlButtons() +
+      '<div class="lab-metrics">' +
+        xlMetric(T('cdMetricStep'), (cur ? cur.r : 0) + ' / ' + rs.length) +
+        xlMetric(T('cdMetricColl'), cur ? cur.collisions : 0) +
+        xlMetric(T('cdMetricSucc'), cur ? cur.successes : 0) +
+        xlMetric(T('wfMetricCw'), cur ? '0~' + cur.cw : '—') +
+        xlMetric(T('wfMetricNav'), cur ? cur.navUs + ' μs' : '—') +
+        xlMetric(T('wfMetricIfs'), (cur ? cur.difs : 50) + ' / ' + (cur ? cur.sifs : 10) + ' μs') +
+        xlMetric(T('wfMetricPhase'), cur ? ph(WF_PHASE, cur.phase) : T('labReady'), true) +
+      '</div>' +
+      '<div class="xl-table-title">' + esc(T('wfTable')) + '</div>' +
+      '<table class="xl-table"><thead><tr><th>' + esc(T('wfThSite')) + '</th><th>' + esc(T('wfThBackoff')) +
+        '</th><th>' + esc(T('wfThNav')) + '</th><th>' + esc(T('wfThState')) +
+        '</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      xlLogs(logs) +
+      (lab.at >= rs.length ? '<div class="lab-empty">' + esc(T('xlStepDone')) + '</div>' : '');
+  }
+
   /* ---------------- 实验注册表 ---------------- */
   const LAB_DEFS = {
     tcpcc: {
@@ -1117,6 +1467,20 @@
       strip: (t, en) => en ? t.replace(/^Stage \d+ · [^:]+: /, '') : t.replace(/^阶段 \d+ · [^：]+：/, ''),
       tag: r => (state.lang === 'en' ? 'Stage ' : '阶段 ') + r,
       evt: cur => !!(cur && ['fail', 'detect', 'tcn', 'converge'].indexOf(cur.phase) >= 0)
+    },
+    csma: {
+      tab: 'cdLabView', cfg: () => Object.assign({}, D.cdDefault), simulate: c => D.cdSimulate(c),
+      chart: rs => cdChartHTML(rs), side: rs => cdSideHTML(rs), aria: () => T('cdChart'),
+      strip: t => t,
+      tag: r => (state.lang === 'en' ? 'Slot ' : '时隙 ') + r,
+      evt: cur => !!(cur && ['collision', 'late', 'giveup', 'jam', 'success'].indexOf(cur.phase) >= 0)
+    },
+    wifi: {
+      tab: 'wfLabView', cfg: () => Object.assign({}, D.wfDefault), simulate: c => D.wfSimulate(c),
+      chart: rs => wfChartHTML(rs), side: rs => wfSideHTML(rs), aria: () => T('wfChart'),
+      strip: t => t,
+      tag: r => (state.lang === 'en' ? 'Slot ' : '时隙 ') + r,
+      evt: cur => !!(cur && ['collision', 'timeout', 'retry', 'success'].indexOf(cur.phase) >= 0)
     }
   };
 

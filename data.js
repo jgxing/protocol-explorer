@@ -27,7 +27,9 @@
     arp: '#8a5cd6', icmp: '#0f9c9c', dhcp: '#7c4dd6', ws: '#dd9a12',
     quic: '#c04a8e', payload: '#7b89ad', smtp: '#dd9a12', ftp: '#dd9a12',
     rip: '#e07b1f', ospf: '#2f9c6a', bgp: '#a83f8f',
-    llc: '#5b6bb5', stp: '#1f8a9c'
+    llc: '#5b6bb5', stp: '#1f8a9c',
+    phy: '#8a93ad', pad: '#aab4c8', fcs: '#0f9c9c', jam: '#d0483f',
+    wlan: '#7c4dd6', wlanctl: '#12a08f', snap: '#5b6bb5', eapol: '#d24b6a'
   };
 
   const MAC_CLIENT = '08:00:5e:5d:52:81';
@@ -643,6 +645,270 @@
   }
   const stpFrame = (src, bpdu) =>
     [ETH8023(MAC_STP_MCAST, src, 3 + bpdu.bytes.length), LLC_STP(), bpdu];
+
+  /* ============================================================
+     共享介质 CSMA/CD 与 IEEE 802.11 无线局域网层构造器
+     —— CSMA/CD 关注「一个冲突域里真实出现在线上的字节」；
+     —— 802.11 按 MAC 首部 / 帧体 / FCS 逐字段生成三类帧。
+     ============================================================ */
+  const CD_SLOT_BITS = 512;   // 争用期 / 时隙长度 = 512 bit
+  const CD_SLOT_US = 51.2;    // 10 Mbps 下发送 512 bit 的时间
+  const CD_TAU_US = 25.6;     // 单程最大传播时延
+  const CD_IFG_BITS = 96;     // 帧间隙 96 bit
+  const CD_JAM_BITS = 32;     // 强化冲突 Jam 长度
+
+  const MAC_AP = '00:1b:21:9c:4e:0a';   // AP 的无线 MAC，同时用作 BSSID
+  const MAC_STA = MAC_CLIENT;
+  const MAC_STA2 = MAC_B;
+  const MAC_DS = '00:1b:21:9c:4e:0b';
+  const WLAN_BCAST = MAC_BCAST;
+  const WLAN_SSID = 'ZJGSU-Lab';
+  const WLAN_CH = 6;
+
+  /* ---------- 以太网共享介质：物理层信号与 MAC 帧 ---------- */
+  function CD_PREAMBLE() {
+    const l = L('phy', '前导码 + SFD', 'PRE', C.phy,
+      [0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xab],
+      [
+        F('前导码 Preamble', '7 × 0xAA (10101010)', 0, 7,
+          '让接收端锁相环与发送端时钟同步。共享介质上所有站点都靠这段交替的 1010 波形判断「信道上有载波」。'),
+        F('SFD 帧起始定界符', '0xAB (10101011)', 7, 1,
+          '最后两个 bit 由 10 变 11，标志后面紧接着就是 MAC 帧的第一个字节（目的地址）。')
+      ]);
+    l.note = '前导码 + SFD 共 8 字节由物理层添加，不属于 MAC 帧，也不计入 64~1518 字节的帧长；常规抓包工具看不到它们。';
+    return l;
+  }
+  function CD_ETH(dst, src) {
+    const l = L('eth', 'Ethernet II 帧首部', 'ETH', C.eth,
+      [...U.mac(dst), ...U.mac(src), 0x08, 0x00],
+      [
+        F('目的地址', dst, 0, 6, '同一冲突域内所有网卡都能收到这个帧，只有目的 MAC 匹配的网卡才把内容上交。'),
+        F('源地址', src, 6, 6, '发送站点的 MAC。冲突后重传时源地址不变，也不携带任何「第几次重传」标记。'),
+        F('类型 EtherType', '0x0800 (IPv4)', 12, 2, '指示上层协议。注意 IEEE 802.3 帧这里可能是长度字段，与本课程的 Ethernet II 不同。')
+      ]);
+    l.note = 'MAC 帧从「目的地址」算到 FCS：首部 14 B + 数据 46~1500 B + FCS 4 B = 64~1518 B。数据不足 46 B 时必须由 MAC 子层补 PAD，否则无法满足最短帧长。';
+    return l;
+  }
+  function CD_PAD(n) {
+    const l = L('pad', '填充 PAD', 'PAD', C.pad, U.z(n), [
+      F('填充字节', n + ' × 0x00', 0, n,
+        '上层只交了较短的数据。为满足「数据字段至少 46 字节」，MAC 子层在 FCS 之前补 0；接收端靠 IP 首部的总长度字段区分有效数据与填充。')
+    ]);
+    l.note = 'PAD 不是应用层数据：它只是在发送前补进去、保证帧发送时间 ≥ 争用期 51.2 μs 的占位字节。';
+    return l;
+  }
+  function CD_FCS(bad) {
+    const bytes = bad ? [0xde, 0xad, 0xbe, 0xef] : [0x1b, 0x4a, 0x9c, 0x72];
+    const l = L('fcs', '帧校验序列 FCS', 'FCS', C.fcs, bytes, [
+      F('CRC-32', bad ? '0xdeadbeef（校验错误）' : '0x1b4a9c72', 0, 4,
+        bad ? '冲突叠加破坏了比特，接收端算出的 CRC 与帧尾不符，直接丢弃这个碎片（runt / FCS error）。'
+          : '覆盖目的地址到数据字段末尾的 CRC-32。校验失败的帧被网卡静默丢弃，以太网不负责重传。')
+    ]);
+    l.note = '以太网没有 ACK，也没有链路层重传：FCS 出错的帧直接丢弃，「是否送达」由上层（如 TCP）自己判断。';
+    return l;
+  }
+  function CD_IDLE() {
+    const l = L('phy', '帧间隙 IFG（空闲）', 'IFG', C.phy, U.z(12), [
+      F('96 bit 空闲', '12 字节时间 · 无信号', 0, 12,
+        '发送完一帧后必须安静 96 bit time（10 Mbps 下 9.6 μs），让所有站点恢复并公平竞争下一个时隙。这 12 个 0 仅表示「线上没有信号」，不是真实字节。')
+    ]);
+    l.note = 'IFG、前导码与 Jam 都是物理层信号，不属于 MAC 帧；这里用占位字节把它们画进十六进制视图，便于对照争用期。';
+    return l;
+  }
+  function CD_JAM() {
+    const l = L('jam', '强化冲突 Jam 信号', 'JAM', C.jam, [0x55, 0x55, 0x55, 0x55], [
+      F('Jam 32 bit', '4 × 0x55', 0, 4,
+        '检测到冲突的站点立即停止发帧，改发 32 bit 的强化冲突信号，确保网段上所有站点都能察觉这次冲突，避免有人误以为帧已发完。')
+    ]);
+    l.note = 'Jam 之后线路恢复空闲，各站点启动二进制指数退避；冲突中产生的残缺帧（< 64 B）会被接收端判为 runt 丢弃。';
+    return l;
+  }
+  function CD_FRAGMENT() {
+    const l = L('jam', '冲突碎片（残缺帧）', 'FRAG', C.jam,
+      [0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xab,
+        ...U.mac(MAC_B).slice(0, 6), ...U.mac(MAC_A).slice(0, 4), 0x08, 0x00, 0x45, 0x00],
+      [
+        F('前导码 + SFD', '8 B', 0, 8, '两站几乎同时发出的前导码在介质上叠加，仍能识别起始位置。'),
+        F('叠加的 MAC 字段', '6 B 目的 + 4 B 源 + 3 B 类型/版本', 8, 13,
+          'A 与 B 的信号在电缆上电压叠加，比特已被破坏，抓到的是长度不足 64 B 的碎片（runt / collision fragment）。')
+      ]);
+    l.note = '冲突碎片没有有效 FCS，长度通常远小于 64 B，接收网卡按「runt frame」直接丢弃；发送方则靠自己的冲突检测决定是否重传。';
+    return l;
+  }
+  // 上层数据：IPv4 + ICMP Echo，长度可调，用于演示 PAD 与最短帧长
+  const CD_BODY = (seq, n) => [IPV4(IP_A, IP_B, 1, '1 (ICMP)', 8 + n),
+    ICMP(8, 0, 'Echo Request', 0x0c51, seq, U.z(n))];
+  const cdFrame = o => {
+    const dst = o.dst || MAC_B, src = o.src || MAC_A;
+    const body = o.body || CD_BODY(o.seq || 1, o.len == null ? 14 : o.len);
+    const dataLen = body.reduce((a, l) => a + l.bytes.length, 0);
+    const padN = o.noPad ? 0 : Math.max(0, 46 - dataLen);
+    const ls = [CD_PREAMBLE(), CD_ETH(dst, src), ...body];
+    if (padN) ls.push(CD_PAD(padN));
+    if (!o.noFcs) ls.push(CD_FCS(o.badFcs));
+    return ls;
+  };
+
+  /* ---------- IEEE 802.11 MAC 层 ---------- */
+  // Frame Control 第 0 字节 = 版本(2) + 类型(2) + 子类型(4)，第 1 字节 = 8 个标志位
+  const WLAN_FC = {
+    beacon: [0x80, 0x00], probeReq: [0x40, 0x00], probeResp: [0x50, 0x00],
+    auth: [0xb0, 0x00], assocReq: [0x00, 0x00], assocResp: [0x10, 0x00],
+    rts: [0xb4, 0x00], cts: [0xc4, 0x00], ack: [0xd4, 0x00],
+    data: [0x08, 0x01], dataRetry: [0x08, 0x09], dataFrom: [0x08, 0x02]
+  };
+  const WLAN_TYPE = {
+    beacon: '管理帧 · Beacon (subtype 8)', probeReq: '管理帧 · Probe Request (4)',
+    probeResp: '管理帧 · Probe Response (5)', auth: '管理帧 · Authentication (11)',
+    assocReq: '管理帧 · Association Request (0)', assocResp: '管理帧 · Association Response (1)',
+    data: '数据帧 · Data (0)', dataRetry: '数据帧 · Data (0) · Retry=1',
+    dataFrom: '数据帧 · Data (0) · From DS'
+  };
+  function WLAN_HDR(o) {
+    const fc = WLAN_FC[o.fc] || WLAN_FC.data;
+    const f1 = o.fl == null ? fc[1] : o.fl;
+    const sc = ((o.seq || 0) << 4) | (o.frag || 0);
+    const bytes = [fc[0], f1, ...U.u16(o.dur || 0), ...U.mac(o.a1), ...U.mac(o.a2), ...U.mac(o.a3), ...U.u16(sc)];
+    const l = L('wlan', '802.11 MAC 首部', '802.11', C.wlan, bytes, [
+      F('帧控制 · 版本/类型/子类型', '0x' + fc[0].toString(16) + ' · ' + (WLAN_TYPE[o.fc] || WLAN_TYPE.data), 0, 1,
+        '低 2 位协议版本恒为 0；bit2~3 类型：00 管理帧、01 控制帧、10 数据帧；高 4 位子类型区分 Beacon / Probe / Auth / Data 等。'),
+      F('帧控制 · 标志位', '0x' + f1.toString(16) + (o.fc === 'data' ? ' · To DS=1' : '') +
+        (o.fc === 'dataRetry' ? ' · To DS=1, Retry=1' : ''), 1, 1,
+        'bit0 To DS、bit1 From DS 决定三个地址字段的含义；bit3 Retry 表示这是重传帧；bit6 Protected 表示帧体已加密；bit7 Order 要求严格按序。'),
+      F('Duration / ID', (o.dur || 0) + ' μs · NAV', 2, 2,
+        '发送方预留信道的时间。其它站点把这个值写入网络分配矢量 NAV，做「虚拟载波侦听」：即使物理上听不到，也会在 NAV 归零前保持沉默。'),
+      F('地址 1 · ' + (o.a1n || 'RA'), o.a1, 4, 6,
+        '地址 1 永远是接收端无线地址（RA）：To DS=1 时为 AP 的 BSSID，From DS=1 时为最终站点。'),
+      F('地址 2 · ' + (o.a2n || 'TA'), o.a2, 10, 6,
+        '地址 2 永远是发送端无线地址（TA）：数据帧里是源站点 MAC，控制帧/ACK 里含义随帧类型变化。'),
+      F('地址 3 · ' + (o.a3n || 'BSSID'), o.a3, 16, 6,
+        '地址 3 在有 AP 的基础设施网络中通常放 BSSID；To DS=1 时它是真正的目的地址（SA/DA 需要靠三个地址共同还原）。'),
+      F('序列控制 · 分片 / 序号', 'Seq ' + (o.seq || 0) + ' · Frag ' + (o.frag || 0), 22, 2,
+        '高 12 位是每帧递增的序列号，低 4 位是分片号。重传帧序号不变但 Retry 置 1，接收端据此去重。')
+    ]);
+    l.note = '802.11 MAC 首部固定 24 字节（QoS 数据帧再多 2 字节 QoS Control）。管理帧和数据帧用三个地址，控制帧只用 1~2 个地址，因此长度更短。';
+    return l;
+  }
+  function WLAN_CTRL(o) {
+    const fc = WLAN_FC[o.fc];
+    const bytes = [fc[0], fc[1], ...U.u16(o.dur || 0), ...U.mac(o.ra), ...(o.ta ? U.mac(o.ta) : [])];
+    const l = L('wlanctl', '802.11 控制帧 · ' + (o.fc === 'rts' ? 'RTS' : o.fc === 'cts' ? 'CTS' : 'ACK'),
+      'CTRL', C.wlanctl, bytes, [
+        F('帧控制 FC', '0x' + fc[0].toString(16) + ' · ' +
+          (o.fc === 'rts' ? 'RTS (subtype 11)' : o.fc === 'cts' ? 'CTS (12)' : 'ACK (13)'), 0, 2,
+          o.fc === 'rts' ? '请求发送：发送方先问 AP「我要占用信道这么久，可以吗」。'
+            : o.fc === 'cts' ? '允许发送：AP 广播式应答，覆盖范围内的所有站点都会据此设置 NAV。'
+              : '确认：接收端在 SIFS（10 μs）后回一个 14 字节的 ACK，这是 802.11 判断「发送成功」的唯一依据。'),
+        F('Duration / NAV', (o.dur || 0) + ' μs', 2, 2,
+          'RTS/CTS 里的 Duration 覆盖「后续 CTS + DATA + ACK + 3×SIFS」整段交换，让隐藏节点提前静默。'),
+        F('接收地址 RA', o.ra, 4, 6,
+          o.fc === 'ack' ? 'ACK 只填原发送方地址：它是对刚才那一帧的确认，不需要再带源地址。' : '该控制帧的接收端无线地址。'),
+        ...(o.ta ? [F('发送地址 TA', o.ta, 10, 6, 'RTS 必须带上发送方地址，AP 才知道该给谁回 CTS。')] : [])
+      ]);
+    l.note = '控制帧不含帧体与序列号：RTS 20 B、CTS / ACK 14 B（均已含 4 B FCS）。它们用短帧换时间，把「长数据帧可能撞车」的风险压缩到一次短握手上。';
+    return l;
+  }
+  function WLAN_FCS() {
+    const l = L('fcs', '帧校验序列 FCS', 'FCS', C.fcs, [0xa7, 0x3c, 0x19, 0xd0], [
+      F('CRC-32', '0xa73c19d0', 0, 4,
+        '覆盖 MAC 首部与帧体。FCS 出错的帧不回 ACK，发送方在 ACK 超时后按 CSMA/CA 规则重新争用并重传。')
+    ]);
+    return l;
+  }
+  function WLAN_BEACON_BODY() {
+    const ssid = U.s(WLAN_SSID), ieSsid = 2 + ssid.length;
+    const bytes = [
+      0x00, 0x00, 0x00, 0x00, 0x1a, 0x2b, 0x3c, 0x4d,
+      ...U.u16(100), 0x11, 0x04,
+      0x00, ssid.length, ...ssid,
+      0x01, 0x04, 0x82, 0x84, 0x8b, 0x96,
+      0x03, 0x01, WLAN_CH,
+      0x30, 0x0c, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04
+    ];
+    const oRates = 12 + ieSsid, oDs = oRates + 6, oRsn = oDs + 3;
+    const l = L('wlanbody', 'Beacon 帧体 · 信息元素', 'BEACON', C.wlan, bytes, [
+      F('Timestamp', '0x000000001a2b3c4d', 0, 8, 'AP 的 64 位微秒计时器，站点据此同步 TSF 时钟，也用于省电唤醒。'),
+      F('Beacon Interval', '100 TU ≈ 102.4 ms', 8, 2, 'AP 每 100 个时间单元（1 TU = 1024 μs）广播一次 Beacon，宣告自己的存在。'),
+      F('Capability Info', '0x0411 · ESS + Privacy', 10, 2, 'ESS=1 表示这是基础设施模式 AP；Privacy=1 表示启用加密（WPA2/WPA3）。'),
+      F('IE 0 · SSID', WLAN_SSID, 12, ieSsid, '信息元素采用 TLV 编码：1 B 类型 + 1 B 长度 + 内容。被动扫描时站点就是靠它发现网络。'),
+      F('IE 1 · Supported Rates', '1 / 2 / 5.5 / 11 Mbps', oRates, 6, 'AP 支持的速率集合；每个值的最高位表示是否为基本速率（必须支持才能关联）。'),
+      F('IE 3 · DS Parameter', 'Channel ' + WLAN_CH, oDs, 3, '当前工作信道。2.4 GHz 频段只有 1/6/11 三个互不重叠信道。'),
+      F('IE 48 · RSN', 'WPA2 · CCMP / PSK', oRsn, 14, 'RSN（Robust Security Network）信息元素声明认证与加密套件，决定后续四次握手的算法。')
+    ]);
+    l.note = 'Beacon 是广播管理帧：目的地址为 ff:ff:ff:ff:ff:ff，不需要 ACK。站点既可以被动听 Beacon，也可以主动发 Probe Request 索要应答。';
+    return l;
+  }
+  function WLAN_PROBE_REQ_BODY() {
+    const l = L('wlanbody', 'Probe Request 帧体', 'PROBE', C.wlan,
+      [0x00, 0x00, 0x01, 0x04, 0x82, 0x84, 0x8b, 0x96], [
+        F('IE 0 · SSID（通配）', '长度 0 · 探测所有网络', 0, 2, '长度为 0 表示「不指定 SSID」，范围内所有 AP 都会回应；填具体名称则只有匹配的 AP 应答。'),
+        F('IE 1 · Supported Rates', '1 / 2 / 5.5 / 11 Mbps', 2, 6, '客户端声明自己支持的速率，AP 据此判断能否建立连接。')
+      ]);
+    l.note = '主动扫描会暴露客户端曾连接过的 SSID；被动扫描只听 Beacon，更省电也更隐蔽。';
+    return l;
+  }
+  function WLAN_AUTH_BODY(seq, status) {
+    const l = L('wlanbody', 'Authentication 帧体', 'AUTH', C.wlan,
+      [...U.u16(0), ...U.u16(seq), ...U.u16(status)], [
+        F('认证算法', '0 (Open System)', 0, 2, '开放系统认证：实际上不校验身份，只是走完 802.11 状态机的两步交换；真正的安全由 WPA2 四次握手完成。'),
+        F('事务序号', String(seq), 2, 2, '1 = 站点发起，2 = AP 应答；共享密钥认证还会有第 3、4 步。'),
+        F('状态码', status === 0 ? '0 (Success)' : String(status), 4, 2, '0 表示成功；非 0 表示拒绝，关联流程就此终止。')
+      ]);
+    return l;
+  }
+  function WLAN_ASSOC_BODY(resp, aid) {
+    const ssid = U.s(WLAN_SSID);
+    if (!resp) {
+      const bytes = [0x11, 0x04, ...U.u16(10), 0x00, ssid.length, ...ssid, 0x01, 0x04, 0x82, 0x84, 0x8b, 0x96];
+      return L('wlanbody', 'Association Request 帧体', 'ASSOC', C.wlan, bytes, [
+        F('Capability Info', '0x0411', 0, 2, '站点声明自己支持的能力（ESS、加密、短时隙等），必须与 AP 兼容。'),
+        F('Listen Interval', '10 BI', 2, 2, '省电模式下站点每隔多少个 Beacon 周期醒来收一次缓存帧。'),
+        F('IE 0 · SSID', WLAN_SSID, 4, 2 + ssid.length, '要加入的网络名称，必须与 AP 的 Beacon 一致。'),
+        F('IE 1 · Supported Rates', '1 / 2 / 5.5 / 11 Mbps', 4 + 2 + ssid.length, 6, '站点支持的速率集；AP 从中挑一个作为后续通信速率。')
+      ]);
+    }
+    return L('wlanbody', 'Association Response 帧体', 'ASSOC', C.wlan,
+      [0x11, 0x04, 0x00, 0x00, ...U.u16(aid), 0x01, 0x04, 0x82, 0x84, 0x8b, 0x96], [
+        F('Capability Info', '0x0411', 0, 2, 'AP 最终确认的能力集合。'),
+        F('状态码', '0 (Success)', 2, 2, '0 表示关联成功，站点从「已认证」进入「已关联」状态。'),
+        F('关联 ID AID', String(aid), 4, 2, 'AP 分配给站点的短标识，用于省电轮询与 TIM 位图索引。'),
+        F('IE 1 · Supported Rates', '1 / 2 / 5.5 / 11 Mbps', 6, 6, '协商后的速率集合。')
+      ]);
+  }
+  function WLAN_EAPOL_BODY(step) {
+    const names = { 1: 'ANonce', 2: 'SNonce + MIC', 3: 'GTK + MIC + Install', 4: '确认 ACK' }[step];
+    const info = [0x00, 0x8a, 0x00, 0xca, 0x01, 0x0a, 0x00, 0x8a][step - 1];
+    const bytes = [
+      0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e,   // LLC/SNAP → EAPOL
+      0x02, 0x03, 0x00, 0x5f,                             // EAPOL: version / type=Key / length
+      0x02, info, 0x00, 0x00, 0x10,                       // descriptor / key info / key length
+      ...U.z(8), ...U.seq(8, 0x30 + step, 7)
+    ];
+    const l = L('eapol', 'EAPOL-Key · 四次握手 第 ' + step + '/4', 'EAPOL', C.eapol, bytes, [
+      F('LLC / SNAP', 'AA:AA:03 + OUI 00:00:00 + 0x888E', 0, 8, '0x888E 是 EAPOL 的 EtherType：802.11 数据帧里承载认证报文时先套一层 LLC/SNAP。'),
+      F('EAPOL 首部', 'v2 · Type 3 (Key) · Len 95', 8, 4, '版本 2 = 802.1X-2004；Type 3 表示密钥协商报文。'),
+      F('Key Descriptor / Info', '0x' + info.toString(16) + ' · ' + names, 12, 5,
+        'Key Info 里的 ACK / MIC / Install / Key Type 位组合区分四次握手的每一条消息。'),
+      F('Replay Counter', '8 字节单调递增', 17, 8, '防止重放攻击：每发一条 EAPOL-Key 加 1，收到旧计数器的报文直接丢弃。'),
+      F('Nonce / MIC（节选）', '8 B · ' + names, 25, 8,
+        step === 1 ? 'AP 发出 ANonce。' : step === 2 ? '站点生成 SNonce，用 PMK 派生 PTK 并带上 MIC 供 AP 校验。' :
+          step === 3 ? 'AP 验证 MIC 后下发组密钥 GTK，并置 Install 位。' : '站点回最后一条确认，双方安装 PTK/GTK，此后数据帧的 Protected 位置 1。')
+    ]);
+    l.note = 'WPA2-PSK 四次握手用 ANonce / SNonce / 双方 MAC / PMK 派生 PTK，并逐条用 MIC 校验。真实报文还含 32 B Nonce、16 B MIC 与密钥数据字段，此处按教学需要节选。';
+    return l;
+  }
+  function WLAN_SNAP() {
+    const l = L('snap', 'LLC / SNAP', 'SNAP', C.snap,
+      [0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x08, 0x00], [
+        F('DSAP / SSAP / Control', '0xAA / 0xAA / 0x03', 0, 3, 'SNAP 封装的固定前缀：0xAA 表示后续是 SNAP 扩展，0x03 为无编号信息帧。'),
+        F('OUI + EtherType', '00:00:00 + 0x0800 (IPv4)', 3, 5, '3 字节组织唯一标识 + 2 字节上层协议类型，等价于以太网里的 EtherType。')
+      ]);
+    l.note = '802.11 数据帧没有 EtherType 字段，必须靠 8 字节 LLC/SNAP 告诉接收端「帧体是 IPv4 报文」。';
+    return l;
+  }
+  const WLAN_DATA_BODY = (seq) => [WLAN_SNAP(), IPV4(IP_A, IP_B, 1, '1 (ICMP)', 22),
+    ICMP(8, 0, 'Echo Request', 0x0c61, seq, U.z(14))];
+  const wlanFrame = (hdr, body) => [hdr, ...(body || []), WLAN_FCS()];
 
   /* ---------- 场景数据 ---------- */
   const S = {};
@@ -2164,8 +2430,548 @@
     });
   })();
 
+  /* ============================================================
+     21 · 以太网 CSMA/CD 共享介质
+     共享仿真内核：按「载波侦听 → 同时发送 → 冲突 → Jam →
+     二进制指数退避 → 重发成功」逐时隙推演介质上的事件。
+     ============================================================ */
+  const CD_LAB_DEFAULT = { hosts: 2, frame: 'min', backoff: 'beb' };
+  const CD_FRAME_INFO = {
+    min: { bytes: 64, txUs: 51.2, zh: '64 B 最短帧', en: '64 B minimum frame' },
+    short: { bytes: 40, txUs: 32, zh: '40 B 过短帧', en: '40 B runt frame' },
+    long: { bytes: 1518, txUs: 1214.4, zh: '1518 B 长帧', en: '1518 B long frame' }
+  };
+  const CD_BACKOFF_ZH = { beb: '二进制指数退避 BEB', fixed: '固定窗口退避 (0~3)', none: '不退避（立即重发）' };
+  const CD_BACKOFF_EN = { beb: 'Binary exponential backoff', fixed: 'Fixed window (0–3)', none: 'No backoff (immediate retry)' };
+
+  function simulateCSMA(cfg) {
+    const o = Object.assign({}, CD_LAB_DEFAULT, cfg || {});
+    const names = ['A', 'B', 'C', 'D'].slice(0, o.hosts);
+    const FI = CD_FRAME_INFO[o.frame] || CD_FRAME_INFO.min;
+    const minOk = o.frame !== 'short';
+    const slotUs = CD_SLOT_US, tau = CD_TAU_US, jamUs = 3.2;
+    const out = [], st = {};
+    names.forEach(n => { st[n] = { s: 'sense', attempt: 0, k: 0, pick: 0, remain: 0, frozen: false, done: false }; });
+    const active = names.slice(0, o.hosts >= 3 ? 3 : 2);
+    let t = 0, collisions = 0, successes = 0, attempts = 0;
+
+    const snap = () => { const q = {}; names.forEach(n => { q[n] = Object.assign({}, st[n]); }); return q; };
+    const push = (phase, bus, extra) => out.push(Object.assign({
+      r: out.length + 1, t: +t.toFixed(1), phase: phase, bus: bus, st: snap(),
+      names: names.slice(), active: active.slice(), collisions: collisions, successes: successes,
+      attempts: attempts, frameBytes: FI.bytes, txUs: FI.txUs, slotUs: slotUs,
+      minOk: minOk, backoff: o.backoff, hosts: o.hosts, frame: o.frame, p: 0
+    }, extra || {}));
+    const pickOf = (n, attempt) => {
+      const max = o.backoff === 'beb' ? Math.pow(2, Math.min(attempt, 10)) : (o.backoff === 'fixed' ? 4 : 1);
+      const seed = (attempt * 7 + names.indexOf(n) * 3 + 1) * 13 + o.hosts * 5 + collisions * 17;
+      return seed % max;
+    };
+    const rList = list => list.map(n => n + ' → r=' + st[n].pick).join('，');
+    const rListEn = list => list.map(n => n + ' → r=' + st[n].pick).join(', ');
+
+    // ① 载波侦听：IFG 结束，多个站点同时有帧要发
+    push('sense', 'idle', { p: 0,
+      zh: '时隙 0 · 载波侦听：' + names.join(' / ') + ' 都挂在同一条共享总线上，属于同一个冲突域。上一帧结束后的 96 bit 帧间隙（9.6 μs）已满，' + active.join(' 与 ') + ' 同时侦听到介质空闲并准备发送 ' + FI.zh + '。',
+      en: 'Slot 0 · Carrier sense: ' + names.join(' / ') + ' share one bus and one collision domain. After the 96-bit interframe gap (9.6 μs), ' + active.join(' and ') + ' all sense an idle medium and prepare to send a ' + FI.en + '.' });
+
+    // ② 传播时延内的「几乎同时」发送 → 冲突
+    active.forEach(n => { st[n].s = 'tx'; st[n].attempt = 1; attempts++; });
+    push('tx', 'busy', { p: 1,
+      zh: 't = 0 μs · ' + active.join(' 与 ') + ' 开始发送。信号以约 2×10⁸ m/s 传播，最远两端单程需要 ' + tau + ' μs：B 在 A 的载波尚未抵达时也开始发帧，两个信号在电缆上叠加。',
+      en: 't = 0 μs · ' + active.join(' and ') + ' start transmitting. A signal needs up to ' + tau + ' μs to cross the cable, so B starts before A’s carrier arrives and the two signals overlap.' });
+
+    if (!minOk) {
+      t = FI.txUs;
+      active.forEach(n => { st[n].s = 'done'; st[n].done = true; });
+      push('late', 'collision', { p: 8,
+        zh: 't = ' + FI.txUs + ' μs · 过短帧已发完：' + FI.bytes + ' B 只需 ' + FI.txUs + ' μs，小于往返传播时延 51.2 μs。冲突信号传回时发送方早已发完，误以为发送成功，不会重传；接收端只看到一个 FCS 错误的残帧并丢弃 —— 这就是「迟到冲突」，也是最短帧长必须 ≥ 64 B 的根本原因。',
+        en: 't = ' + FI.txUs + ' μs · The runt is already finished: ' + FI.bytes + ' B takes only ' + FI.txUs + ' μs, less than the 51.2 μs round-trip delay. The collision returns after the sender stopped, so it assumes success and never retries; the receiver just drops a bad-FCS fragment. This late collision is exactly why a frame must be at least 64 B.' });
+      push('done', 'idle', { p: 9,
+        zh: '结论：10 Mbps 以太网把争用期定为 512 bit = 51.2 μs，对应 64 字节。数据不足 46 字节时由 MAC 补 PAD，确保「最晚的冲突一定在帧发完之前被检测到」。可把帧长切回 64 B 再跑一次对比。',
+        en: 'Conclusion: 10 Mbps Ethernet fixes the contention period at 512 bit = 51.2 μs, i.e. 64 bytes. Frames shorter than 46 B of payload are padded so that even the latest collision is detected before transmission ends. Switch back to 64 B and compare.' });
+      return out;
+    }
+
+    t = tau;
+    active.forEach(n => { st[n].s = 'collision'; });
+    collisions++;
+    push('collision', 'collision', { p: 3,
+      zh: 't = ' + tau + ' μs · 边发边听：' + active.join(' 与 ') + ' 检测到电压异常（信号叠加），判定第 ' + collisions + ' 次冲突。由于 ' + FI.zh + ' 的发送时间 ' + FI.txUs + ' μs ≥ 争用期 51.2 μs，冲突在帧发完之前被及时发现。',
+      en: 't = ' + tau + ' μs · Listen while talking: ' + active.join(' and ') + ' detect the voltage rise and register collision #' + collisions + '. A ' + FI.en + ' takes ' + FI.txUs + ' μs ≥ the 51.2 μs contention period, so the collision is caught before the frame ends.' });
+
+    t += jamUs;
+    active.forEach(n => { st[n].s = 'jam'; });
+    push('jam', 'jam', { p: 4,
+      zh: 't = ' + t.toFixed(1) + ' μs · 强化冲突：各站立即停发数据，改发 32 bit Jam 信号，保证网段上所有站点都意识到本次发送失败；残缺帧（< 64 B）被判为 runt 丢弃。',
+      en: 't = ' + t.toFixed(1) + ' μs · Jam: every sender stops the frame and emits a 32-bit jam so all stations notice the failure; the truncated (< 64 B) fragment is dropped as a runt.' });
+
+    // ③ 二进制指数退避：k = min(重传次数, 10)，r ∈ [0, 2^k − 1]
+    active.forEach(n => {
+      st[n].k = Math.min(st[n].attempt, 10);
+      st[n].pick = pickOf(n, st[n].attempt);
+      st[n].remain = st[n].pick;
+      st[n].s = 'backoff';
+    });
+    const win = o.backoff === 'beb' ? 'k = min(n, 10)，窗口 0 ~ 2ᵏ−1' :
+      (o.backoff === 'fixed' ? '固定窗口 0 ~ 3' : '窗口恒为 0');
+    push('backoff', 'idle', { p: 5,
+      zh: '退避 · ' + CD_BACKOFF_ZH[o.backoff] + '：' + win + '。本次 ' + rList(active) + '（单位：51.2 μs 时隙）。退避计时器只在介质空闲时递减，侦听到别人在发帧就冻结。',
+      en: 'Backoff · ' + CD_BACKOFF_EN[o.backoff] + ': ' + (o.backoff === 'beb' ? 'k = min(n, 10), window 0 … 2^k−1' : o.backoff === 'fixed' ? 'fixed window 0 … 3' : 'window always 0') + '. This time ' + rListEn(active) + ' (unit: one 51.2 μs slot). A backoff timer only decrements while the medium is idle and freezes when another station transmits.' });
+
+    let guard = 0;
+    while (active.some(n => !st[n].done) && guard++ < 18) {
+      // 先检查「退避已归零」的站点：r = 0 的站应立刻发送，不能等别人一起倒数
+      const ready = active.filter(n => !st[n].done && st[n].s === 'backoff' && st[n].remain <= 0);
+      if (ready.length >= 2) {
+        collisions++; attempts += ready.length;
+        ready.forEach(n => { st[n].s = 'collision'; });
+        t += tau;
+        push('collision', 'collision', { p: 3,
+          zh: '第 ' + collisions + ' 次冲突：' + ready.join(' 与 ') + ' 选到了同一个退避时隙，重发再次相撞。' +
+            (o.backoff === 'beb' ? 'BEB 把 k 增大，下一次窗口翻倍，冲突概率随之下降。' :
+              o.backoff === 'none' ? '没有退避时所有站点永远同时重发，冲突会一直重复，直到第 16 次失败被丢弃。' :
+                '固定窗口不随冲突次数扩大，高负载下更容易反复相撞。'),
+          en: 'Collision #' + collisions + ': ' + ready.join(' and ') + ' picked the same slot and collided again. ' +
+            (o.backoff === 'beb' ? 'BEB doubles the window (k grows), so the collision probability drops.' :
+              o.backoff === 'none' ? 'With no backoff every station retries at once, so collisions repeat until the 16th attempt is abandoned.' :
+                'A fixed window never grows, so repeated collisions are more likely under load.') });
+        if (collisions >= 4) {
+          t += jamUs;
+          push('giveup', 'idle', { p: 9,
+            zh: '重传失败：802.3 规定最多重传 16 次，k 在 n > 10 后封顶为 10（窗口最大 0~1023），仍失败就丢弃该帧并向高层报错。本实验只演示前 ' + collisions + ' 次冲突，避免时间轴无限延长；可切回 BEB 观察它如何快速化解冲突。',
+            en: 'Retransmission failure: 802.3 allows at most 16 attempts; k is capped at 10 (window 0…1023) and the frame is dropped with an error to the upper layer. Only the first ' + collisions + ' collisions are shown here; switch back to BEB to see how quickly it resolves them.' });
+          return out;
+        }
+        ready.forEach(n => { st[n].s = 'jam'; });
+        t += jamUs;
+        push('jam', 'jam', { p: 4, zh: '再次发 32 bit Jam，然后重新计算退避。', en: 'Another 32-bit jam, then backoff is recomputed.' });
+        ready.forEach(n => {
+          st[n].attempt++;
+          st[n].k = Math.min(st[n].attempt, 10);
+          st[n].pick = pickOf(n, st[n].attempt);
+          st[n].remain = st[n].pick;
+          st[n].s = 'backoff';
+        });
+        push('backoff', 'idle', { p: 5,
+          zh: '重新退避（第 ' + collisions + ' 次冲突后）：' + rList(ready) + '，窗口 ' +
+            (o.backoff === 'beb' ? '2^' + st[ready[0]].k + ' = ' + Math.pow(2, st[ready[0]].k) + ' 个时隙' : '不变') + '。',
+          en: 'Backoff recomputed (after collision #' + collisions + '): ' + rListEn(ready) + ', window ' +
+            (o.backoff === 'beb' ? '2^' + st[ready[0]].k + ' = ' + Math.pow(2, st[ready[0]].k) + ' slots' : 'unchanged') + '.' });
+        continue;
+      }
+      if (ready.length === 1) {
+        const w = ready[0];
+        st[w].s = 'tx';
+        active.forEach(n => { if (n !== w && !st[n].done && st[n].remain > 0) { st[n].frozen = true; st[n].s = 'frozen'; } });
+        push('tx', 'busy', { p: 6,
+          zh: w + ' 退避结束，重新载波侦听到空闲后发送 ' + FI.zh + '；其余站点侦听到载波，退避计时器冻结（不是清零），等介质空闲再继续倒数。',
+          en: w + ' finishes backoff, senses an idle medium and sends its ' + FI.en + '; the others hear the carrier and freeze (do not reset) their backoff timers until the medium is idle again.' });
+        t += FI.txUs;
+        st[w].s = 'success'; st[w].done = true; successes++;
+        active.forEach(n => { st[n].frozen = false; if (!st[n].done && st[n].s === 'frozen') st[n].s = 'backoff'; });
+        push('success', 'idle', { p: 6,
+          zh: 't = ' + t.toFixed(1) + ' μs · ' + w + ' 的 ' + FI.zh + ' 完整发出，发送期间没有检测到冲突 → 判定成功。以太网不回 ACK、不重传，可靠性交给上层；帧发完后所有站点再等 96 bit IFG 才能竞争下一次发送。',
+          en: 't = ' + t.toFixed(1) + ' μs · ' + w + ' completes its ' + FI.en + ' with no collision detected → success. Ethernet sends no ACK and never retransmits at layer 2; reliability is left to upper layers. All stations then wait one 96-bit IFG before contending again.' });
+        continue;
+      }
+      // 没有站点可以发送 → 介质空闲一个时隙，未冻结的计数器减 1
+      const waiting = active.filter(n => !st[n].done && !st[n].frozen && st[n].remain > 0);
+      if (!waiting.length) break;
+      waiting.forEach(n => { st[n].remain--; });
+      t += slotUs;
+      push('slot', 'idle', { p: 5,
+        zh: '时隙 +1（t = ' + t.toFixed(1) + ' μs）· 介质空闲，等待中的站点把退避计数器减 1：' +
+          active.filter(n => !st[n].done).map(n => n + ' 剩 ' + st[n].remain).join('，') + '。',
+        en: 'Slot +1 (t = ' + t.toFixed(1) + ' μs) · idle medium, waiting stations decrement their counters: ' +
+          active.filter(n => !st[n].done).map(n => n + ' left ' + st[n].remain).join(', ') + '.' });
+    }
+    push('done', 'idle', { p: 9,
+      zh: '本轮结束：' + successes + ' 帧成功、' + collisions + ' 次冲突、' + attempts + ' 次发送尝试。CSMA/CD 用「先听后发、边发边听、冲突停发、随机重发」把一条共享电缆变成可用的多路信道；交换式全双工以太网已不再有冲突域，但最短帧长与 BEB 的规则仍保留在标准里。',
+      en: 'Run complete: ' + successes + ' frame(s) delivered, ' + collisions + ' collision(s), ' + attempts + ' attempts. CSMA/CD turns one shared cable into a usable multi-access channel by "sense before sending, listen while sending, stop on collision, retry randomly". Switched full-duplex Ethernet no longer has collision domains, but the 64 B minimum and BEB rules remain in the standard.' });
+    return out;
+  }
+
+  (function () {
+    const cdA = () => cdFrame({ src: MAC_A, dst: MAC_B, seq: 1 });
+    const cdB = () => cdFrame({ src: MAC_B, dst: MAC_A, seq: 2 });
+    const cdRunt = () => cdFrame({ src: MAC_C, dst: MAC_D, seq: 3, noPad: true,
+      body: [IPV4(IP_C, IP_D, 1, '1 (ICMP)', 2),
+        L('data', '仅 2 字节的 IP 载荷（未填充）', 'DATA', C.payload, [0x00, 0x00],
+          [F('载荷', '2 字节', 0, 2, '上层只交了这么点数据；若网卡不补 PAD，整帧就只有 40 B，发送时间短于争用期。')])]
+    });
+    const M = [
+      { t: 0.000, from: 'ha', to: 'bus', proto: 'IFG', kind: 'sense', phase: '载波侦听',
+        title: '帧间隙 · 介质空闲', info: '96 bit IFG (9.6 μs) · 所有站点载波侦听',
+        note: '共享介质上一次只能有一个信号。发帧前必须先听 96 bit 帧间隙；空闲才能发，这就是 CSMA 的「载波侦听多路访问」。',
+        layers: [CD_IDLE()] },
+      { t: 0.010, from: 'ha', to: 'bus', proto: 'ETH', kind: 'tx', phase: '发送与冲突',
+        title: 'A 发送 64 B 最短帧', info: 'A → B · 64 B · 数据 42 B + PAD 4 B + FCS 4 B',
+        note: '上层只交了 42 字节（IPv4 20 B + ICMP 22 B），MAC 子层补 4 字节 PAD，使数据字段达到 46 B，整帧恰好 64 B = 512 bit，发送时间 51.2 μs 正好等于争用期。',
+        layers: cdA(), displaySize: '64 B' },
+      { t: 0.010, from: 'hb', to: 'bus', proto: 'ETH', kind: 'tx', phase: '发送与冲突',
+        title: 'B 在传播时延内也开始发送', info: 'B → A · 64 B · 与 A 的信号在总线上叠加',
+        note: 'A 的载波需要最多 25.6 μs 才能传到最远端。B 在这段时间内也听到「空闲」并开始发帧，两个信号叠加 —— 冲突不可避免，这就是「传播时延」带来的争用窗口。',
+        layers: cdB(), displaySize: '64 B' },
+      { t: 0.036, from: 'ha', to: 'bus', proto: 'JAM', kind: 'collision', phase: '发送与冲突',
+        title: '冲突 · 残缺帧碎片', info: 'Collision fragment · 21 B · FCS 错误',
+        note: '冲突叠加破坏了比特，抓到的是长度远小于 64 B 的碎片。接收网卡按 runt frame 丢弃；发送方靠「边发边听」检测到电压异常，立即停止发送。',
+        layers: [CD_FRAGMENT(), CD_FCS(true)] },
+      { t: 0.039, from: 'hb', to: 'bus', proto: 'JAM', kind: 'jam', phase: '强化冲突',
+        title: 'Jam 强化冲突信号', info: '32 bit Jam · 通知全网本次发送作废',
+        note: '检测到冲突的站点改发 32 bit 强化冲突信号，确保网段上所有站点都察觉失败。随后线路恢复空闲，各站启动二进制指数退避。',
+        layers: [CD_JAM()] },
+      { t: 0.091, from: 'ha', to: 'bus', proto: 'ETH', kind: 'backoff', phase: '指数退避与重发',
+        title: 'A 退避 r=0 · 立即重发', info: '第 1 次重传 · k=1 · r∈{0,1} 取 0',
+        note: '第 1 次冲突后 k = min(1, 10) = 1，从 {0, 1} 中等概率取 r。A 取到 0，等 0 个 51.2 μs 时隙即可重发；重传帧与首发的字节完全相同，以太网帧里没有「重传次数」字段。',
+        layers: cdA(), displaySize: '64 B' },
+      { t: 0.142, from: 'hb', to: 'bus', proto: 'ETH', kind: 'success', phase: '指数退避与重发',
+        title: 'B 退避 1 时隙后重发成功', info: '第 1 次重传 · k=1 · r=1 → 等 51.2 μs',
+        note: 'B 取到 r=1，先等一个时隙。听到 A 正在发送时退避计时器冻结（不清零），A 发完并再等 96 bit IFG 后才继续倒数，最终独立发出，全程无冲突。',
+        layers: cdB(), displaySize: '64 B' },
+      { t: 0.420, from: 'hc', to: 'bus', proto: 'ETH', kind: 'runt', phase: '最短帧长反例',
+        title: 'C 发送 40 B 过短帧（反例）', info: '14 B 首部 + 22 B 数据 + 4 B FCS = 40 B',
+        note: '故意不补 PAD：整帧只有 40 B，发送时间 32 μs，短于 51.2 μs 争用期。若冲突在最远端发生，冲突信号传回时 C 已经发完，会误判为成功。',
+        layers: cdRunt(), displaySize: '40 B (runt)' },
+      { t: 0.452, from: 'hc', to: 'bus', proto: 'JAM', kind: 'late', phase: '最短帧长反例',
+        title: '迟到冲突 · FCS 校验失败', info: 'Late collision · 接收端丢弃，发送方不重传',
+        note: '这就是「迟到冲突」：过短帧让发送方在检测到冲突之前就结束了发送，网卡不会重传，帧静默丢失。802.3 因此规定最小帧长 64 B，且冲突只可能在帧的前 512 bit 内被检测到。',
+        layers: [CD_FRAGMENT(), CD_FCS(true)] },
+      { t: 0.900, from: 'hd', to: 'bus', proto: 'ETH', kind: 'long', phase: '长帧对照',
+        title: 'D 发送 1518 B 长帧', info: 'D → A · 1518 B（最大帧长）· 占用介质 1214.4 μs',
+        note: '最大帧长 1518 B（含 FCS）的发送时间约 1.21 ms，是争用期的 23.7 倍。长帧一旦冲突代价很高，但也绝不会漏检；这里只展开首段字节，其余数据按 MTU 规则截断。',
+        layers: cdFrame({ src: MAC_D, dst: MAC_A, seq: 4 }), displaySize: '1518 B', truncated: true }
+    ];
+
+    def('csma', {
+      name: 'CSMA/CD', title: '共享介质 · 最短帧长 · 指数退避', cat: 'base',
+      sub: '载波侦听 / 冲突检测 / 二进制指数退避', osi: 2, layer: 2,
+      nodes: ['ha', 'hb', 'hc', 'hd', 'bus'], seqNodes: ['ha', 'hb', 'hc', 'hd', 'bus'],
+      links: [['ha', 'bus'], ['hb', 'bus'], ['hc', 'bus'], ['hd', 'bus']],
+      pos: {
+        ha: { x: 165, y: 120 }, hb: { x: 165, y: 348 }, hc: { x: 835, y: 120 },
+        hd: { x: 835, y: 348 }, bus: { x: 500, y: 234 }
+      },
+      labels: {
+        ha: { name: '站点 A', en: 'Station A', ip: MAC_A },
+        hb: { name: '站点 B', en: 'Station B', ip: MAC_B },
+        hc: { name: '站点 C', en: 'Station C', ip: MAC_C },
+        hd: { name: '站点 D', en: 'Station D', ip: MAC_D },
+        bus: { name: '共享同轴总线 / 集线器', en: 'Shared bus / Hub', ip: '10 Mbps · 一个冲突域' }
+      },
+      steps: [
+        { t: '载波侦听', d: '先听后发，等 96 bit 帧间隙', at: 1 },
+        { t: '发送与冲突', d: '传播时延内两站同时发帧', at: 2 },
+        { t: '强化冲突', d: '发 32 bit Jam 让全网知晓', at: 5 },
+        { t: '二进制指数退避', d: 'k=min(n,10)，r∈[0,2ᵏ−1]', at: 6 },
+        { t: '重发与冻结', d: '忙期冻结计时器，空闲再递减', at: 7 },
+        { t: '最短帧长', d: '64 B 保证冲突在发完前被检出', at: 8 },
+        { t: '长帧与放弃', d: '1518 B 上限、16 次失败丢弃', at: 10 }
+      ],
+      desc: '早期以太网用一条同轴电缆（或集线器）把所有站点连在同一个冲突域里。CSMA/CD 的规则是：先听后发、边发边听、冲突停发、随机重发。为保证最远端的冲突能在帧发完之前传回发送方，10 Mbps 以太网把争用期定为 512 bit = 51.2 μs，对应最小帧长 64 字节（数据不足 46 字节由 MAC 补 PAD）；冲突后按二进制指数退避 k = min(重传次数, 10)、r 从 [0, 2ᵏ−1] 个时隙中随机选取，最多重传 16 次。',
+      tip: '最短帧长不是拍脑袋定的：它等于「往返传播时延 × 发送速率」，即 512 bit = 64 B。帧太短会出现迟到冲突（late collision），发送方误判成功而不重传。BEB 让冲突越频繁、退避窗口越大，从而自适应负载。今天的交换式全双工以太网每条链路只有两个设备、收发分开，已不再需要 CSMA/CD，但 64~1518 B 帧长、96 bit IFG 等规则被完整保留下来。',
+      stats: [
+        { k: '介质访问', v: 'CSMA/CD · 半双工' },
+        { k: '争用期', v: '512 bit = 51.2 μs' },
+        { k: '最短帧长', v: '64 B（数据 ≥ 46 B）' },
+        { k: '强化冲突', v: '32 bit Jam' },
+        { k: '退避窗口', v: 'r ∈ [0, 2ᵏ−1] · k ≤ 10' },
+        { k: '最大重传', v: '16 次后丢弃' },
+        { k: '帧间隙', v: '96 bit = 9.6 μs' }
+      ],
+      packets: M.map((m, i) => P({
+        t: m.t, src: i === 0 ? '—' : ({ ha: MAC_A, hb: MAC_B, hc: MAC_C, hd: MAC_D }[m.from] || MAC_A),
+        dst: ({ ha: MAC_B, hb: MAC_A, hc: MAC_D, hd: MAC_A }[m.from] || MAC_BCAST),
+        proto: m.proto, kind: m.kind, phase: m.phase, from: m.from, to: m.to,
+        title: m.title, info: m.info, note: m.note, osi: [2], layer: 2,
+        displaySize: m.displaySize, truncated: m.truncated, layers: m.layers
+      })),
+      lab: { tab: 'cdLabView' }
+    });
+  })();
+
+  /* ============================================================
+     22 · IEEE 802.11 无线局域网（CSMA/CA 实验）
+     共享仿真内核：DIFS → 竞争窗口退避 → (RTS/CTS + NAV) →
+     DATA → SIFS → ACK；隐藏节点场景演示为什么需要 RTS/CTS。
+     ============================================================ */
+  const WF_LAB_DEFAULT = { stations: 2, rts: 'off', hidden: 'off', cw: 'cw15' };
+  const WF_DIFS = 50, WF_SIFS = 10, WF_SLOT = 9, WF_ACK = 32, WF_NAV = 300;
+
+  function simulateWifi(cfg) {
+    const o = Object.assign({}, WF_LAB_DEFAULT, cfg || {});
+    const rtsOn = o.rts === 'on', hiddenOn = o.hidden === 'on';
+    const cwMax = o.cw === 'cw63' ? 63 : 15;
+    const slots = o.cw === 'cw63' ? 8 : 4;   // 图中按 4 / 8 槽示意真实 CW 0~15 / 0~63
+    const names = o.stations === 3 ? ['STA1', 'STA2', 'STA3'] : ['STA1', 'STA2'];
+    const out = [], st = {};
+    names.forEach(n => { st[n] = { s: 'difs', remain: 0, pick: 0, nav: 0, frozen: false, attempt: 0, done: false }; });
+    st.AP = { s: 'idle', remain: 0, pick: 0, nav: 0, frozen: false, attempt: 0, done: false };
+    let t = 0, collisions = 0, successes = 0, cw = cwMax;
+
+    const r1 = o.cw === 'cw63' ? 2 : 1;
+    const rOf = i => i === 0 ? r1 : r1 + 1 + i;
+    const snap = () => { const q = {}; Object.keys(st).forEach(k => { q[k] = Object.assign({}, st[k]); }); return q; };
+    const push = (phase, medium, extra) => out.push(Object.assign({
+      r: out.length + 1, t: +t.toFixed(1), phase: phase, medium: medium, st: snap(),
+      names: names.slice(), rtsOn: rtsOn, hiddenOn: hiddenOn, cw: cw, cwMax: cwMax, slots: slots,
+      difs: WF_DIFS, sifs: WF_SIFS, slotUs: WF_SLOT, navUs: WF_NAV,
+      collisions: collisions, successes: successes, p: 13
+    }, extra || {}));
+
+    // ① DIFS：介质空闲后所有站点先等一个分布式帧间间隔
+    push('difs', 'idle', { p: 11,
+      zh: 't = 0 μs · 介质空闲，' + names.join(' / ') + ' 都有数据帧要发。802.11 用 CSMA/CA：先等 DIFS = 50 μs（比 SIFS 长），再进入竞争窗口。无线网卡无法边发边听（自身发射功率会淹没接收机），所以只能「发之前避开冲突」，不能像以太网那样「边发边检测」。',
+      en: 't = 0 μs · The medium is idle and ' + names.join(' / ') + ' all have frames. 802.11 uses CSMA/CA: wait DIFS = 50 μs (longer than SIFS), then enter a contention window. A radio cannot transmit and listen at the same time, so it must avoid collisions before sending instead of detecting them during transmission.' });
+
+    // ② 随机退避：从 [0, CW] 里取一个时隙数
+    t = WF_DIFS;
+    names.forEach((n, i) => { st[n].pick = rOf(i); st[n].remain = st[n].pick; st[n].s = 'backoff'; });
+    push('backoff', 'idle', { p: 11,
+      zh: '退避开始 · CW = 0~' + cwMax + '（图中等比缩为 ' + slots + ' 个时隙，1 槽 = ' + WF_SLOT + ' μs）：' +
+        names.map(n => n + ' 取 r=' + st[n].pick).join('，') + '。每过一个空闲时隙计数器减 1，先归零者获得信道；这正是 CA（冲突避免）与 CD（冲突检测）的根本差别。',
+      en: 'Backoff starts · CW = 0–' + cwMax + ' (shown as ' + slots + ' slots of ' + WF_SLOT + ' μs each): ' +
+        names.map(n => n + ' picks r=' + st[n].pick).join(', ') + '. Each idle slot decrements the counter; the first to reach zero wins the medium — the core difference between CA and CD.' });
+
+    for (let k = 0; k < r1; k++) {
+      names.forEach(n => { if (!st[n].done && st[n].remain > 0) st[n].remain--; });
+      t += WF_SLOT;
+      push('slot', 'idle', { p: 11,
+        zh: '空闲时隙 ' + (k + 1) + '（t = ' + t.toFixed(1) + ' μs）· ' +
+          names.map(n => n + ' 剩 ' + st[n].remain).join('，') + '。若此时听到别人开始发送，计数器会冻结，等下次 DIFS 后接着倒数。',
+        en: 'Idle slot ' + (k + 1) + ' (t = ' + t.toFixed(1) + ' μs) · ' +
+          names.map(n => n + ' left ' + st[n].remain).join(', ') + '. If a station hears another transmission it freezes its counter and resumes after the next DIFS.' });
+    }
+
+    const emitSuccess = (w, useRts) => {
+      st[w].s = useRts ? 'rts' : 'tx';
+      names.forEach(n => { if (n !== w && !st[n].done) st[n].s = 'frozen'; });
+      if (useRts) {
+        push('rts', 'busy', { p: 11,
+          zh: w + ' 先发 20 B 的 RTS，Duration = ' + WF_NAV + ' μs，预约「CTS + DATA + SIFS + ACK」整段交换。RTS 很短，即使撞车代价也远小于撞掉一个长数据帧。',
+          en: w + ' sends a 20 B RTS with Duration = ' + WF_NAV + ' μs, reserving the whole CTS + DATA + SIFS + ACK exchange. An RTS is short, so a collision costs far less than losing a long data frame.' });
+        t += 20;
+        st.AP.s = 'cts';
+        names.forEach(n => { if (n !== w && !st[n].done) { st[n].s = 'nav'; st[n].nav = WF_NAV - 20; } });
+        push('cts', 'nav', { p: 12,
+          zh: 'AP 回 14 B 的 CTS（SIFS 后）。' +
+            (hiddenOn ? '关键点：隐藏节点听不到 ' + w + '，但一定能听到 AP，于是也把 CTS 里的 Duration 写进 NAV 并保持静默 —— 虚拟载波侦听解决了隐藏节点问题。'
+              : '范围内所有站点把 Duration 写入 NAV，即使物理上没听到数据帧也会静默，这就是「虚拟载波侦听」。'),
+          en: 'The AP replies with a 14 B CTS after SIFS. ' +
+            (hiddenOn ? 'Crucially, the hidden station cannot hear ' + w + ' but can hear the AP, so it copies the CTS Duration into its NAV and stays quiet — virtual carrier sensing solves the hidden-node problem.'
+              : 'Every station in range copies Duration into its NAV and stays quiet even if it cannot physically hear the data frame — this is virtual carrier sensing.') });
+        t += 10;
+      }
+      st[w].s = 'data'; st.AP.s = 'rx';
+      push('data', 'busy', { p: 13,
+        zh: w + ' 发送 DATA 帧（To DS=1，三个地址分别是 BSSID / SA / DA）。' +
+          (useRts ? '其它站点的 NAV 尚未归零，全程不发帧。' : '其它站点侦听到载波，冻结退避计数器。'),
+        en: w + ' sends the DATA frame (To DS = 1: the three addresses are BSSID / SA / DA). ' +
+          (useRts ? 'Other stations keep silent because their NAV has not expired.' : 'Other stations hear the carrier and freeze their backoff counters.') });
+      t += 150;
+      st[w].s = 'wait'; st.AP.s = 'ack';
+      t += WF_SIFS;
+      push('sifs', 'busy', { p: 14,
+        zh: 't + SIFS = 10 μs · 接收端只等最短的 SIFS 就回 ACK，其它帧必须等更长的 DIFS，因此 ACK 天然拥有最高优先级，不会被第三方插队。',
+        en: 't + SIFS = 10 μs · The receiver waits only the shortest interframe space before ACKing. Every other frame must wait the longer DIFS, so ACKs always win the medium.' });
+      t += WF_ACK;
+      st[w].s = 'success'; st[w].done = true; successes++; st.AP.s = 'idle';
+      names.forEach(n => {
+        if (!st[n].done && (st[n].s === 'nav' || st[n].s === 'frozen')) { st[n].nav = 0; st[n].s = 'backoff'; }
+      });
+      push('success', 'idle', { p: 14,
+        zh: 'AP 在 SIFS 后回 14 B ACK，' + w + ' 收到才算发送成功。收到 ACK 后 CW 重置为 CWmin；若 ACK 超时未到，就认为帧丢失，把 CW 翻倍（' + cw + ' → ' + (2 * cw + 1) + '）后重新争用。',
+        en: 'The AP returns a 14 B ACK after SIFS; ' + w + ' counts the frame as delivered only when the ACK arrives. CW resets to CWmin; a missing ACK means loss, so CW doubles (' + cw + ' → ' + (2 * cw + 1) + ') before retrying.' });
+    };
+
+    // ③ 无 RTS/CTS 且存在隐藏节点 → AP 处冲突
+    if (hiddenOn && !rtsOn) {
+      st[names[0]].s = 'tx'; st[names[1]].s = 'tx';
+      push('tx', 'busy', { p: 13,
+        zh: names[0] + ' 的退避先归零并开始发 DATA。' + names[1] + ' 是隐藏节点：它听不到 ' + names[0] + ' 的载波，误以为信道空闲，也在此时开始发送。',
+        en: names[0] + ' wins the backoff and starts DATA. ' + names[1] + ' is a hidden node: it cannot hear ' + names[0] + '’s carrier, assumes the channel is idle and also starts transmitting.' });
+      t += WF_SIFS;
+      collisions++;
+      push('collision', 'collision', { p: 15,
+        zh: 'AP 同时收到两个叠加的信号，两个帧的 FCS 都错，一个 ACK 也发不出来。注意：两个发送方自己都「听不到」这次冲突 —— 这正是无线网必须靠 ACK 间接判断成败的原因。',
+        en: 'The AP receives two overlapping signals; both FCS checks fail and no ACK can be sent. Neither sender can hear the collision — this is exactly why Wi-Fi must infer success from an ACK.' });
+      t += 150;
+      push('timeout', 'idle', { p: 15,
+        zh: 'ACK 超时：双方都没等到 ACK，判定发送失败，把 CW 翻倍后重新随机退避、重传（帧首部 Retry 位置 1、序列号不变）。隐藏节点场景下重复退避仍可能再次相撞，信道利用率显著下降。',
+        en: 'ACK timeout: neither station receives an ACK, so both double CW, back off again and retransmit (Retry = 1, same sequence number). With a hidden node, repeated retries may collide again and throughput drops sharply.' });
+      cw = 2 * cw + 1;
+      push('retry', 'idle', { p: 15,
+        zh: 'CW 由 ' + cwMax + ' 增大到 ' + cw + '（真实 802.11 按 15 → 31 → 63 → … → 1023 翻倍）。但重传只能缓解拥塞，无法消除「互相听不见」这个物理事实。',
+        en: 'CW grows from ' + cwMax + ' to ' + cw + ' (real 802.11 doubles 15 → 31 → 63 → … → 1023). Retransmission helps with congestion but cannot fix the fact that the two stations cannot hear each other.' });
+      push('done', 'idle', { p: 15,
+        zh: '结论：把「RTS/CTS」切到开启再看一次 —— 短 RTS 由 AP 的 CTS 应答，隐藏节点虽听不到发送方，却能听到 AP，根据 CTS 的 NAV 主动静默，冲突因此被避免。这就是 CSMA/CA 用「预约 + 确认」替代 CSMA/CD「边发边听」的完整逻辑。',
+        en: 'Conclusion: switch RTS/CTS on and replay — the AP answers the short RTS with a CTS, and the hidden node (which hears the AP even though it cannot hear the sender) sets its NAV from the CTS and stays quiet. This is how CSMA/CA replaces "listen while sending" with reservation plus acknowledgement.' });
+      return out;
+    }
+
+    emitSuccess(names[0], rtsOn);
+
+    // ④ 第二站：NAV / 冻结结束后继续争用
+    t += WF_DIFS;
+    st[names[1]].s = 'backoff';
+    push('difs', 'idle', { p: 13,
+      zh: '介质再次空闲，' + names[1] + (o.stations === 3 ? ' / ' + names[2] : '') +
+        ' 等 DIFS 后从冻结的计数器继续倒数（不清零），准备发送自己的帧。',
+      en: 'The medium is idle again; ' + names[1] + (o.stations === 3 ? ' / ' + names[2] : '') +
+        ' waits DIFS and resumes its frozen backoff counter (not reset) before sending.' });
+    t += WF_SLOT;
+    push('slot', 'idle', { p: 13,
+      zh: '空闲时隙（t = ' + t.toFixed(1) + ' μs）· ' + names[1] + ' 退避归零，获得发送权。',
+      en: 'Idle slot (t = ' + t.toFixed(1) + ' μs) · ' + names[1] + ' reaches zero and wins the medium.' });
+    emitSuccess(names[1], rtsOn);
+
+    push('done', 'idle', { p: 14,
+      zh: '本轮结束：' + successes + ' 帧成功、' + collisions + ' 次冲突。802.11 DCF 的顺序是 DIFS → 随机退避 → (可选 RTS/CTS + NAV) → DATA → SIFS → ACK；与以太网的「先听后发、边发边听、冲突停发、指数退避」形成对照：无线网靠「发前避让 + 收后确认」保证可靠。',
+      en: 'Run complete: ' + successes + ' frame(s) delivered, ' + collisions + ' collision(s). The 802.11 DCF order is DIFS → random backoff → (optional RTS/CTS + NAV) → DATA → SIFS → ACK. Compare with Ethernet: Wi-Fi relies on avoiding collisions before sending and acknowledging afterwards.' });
+    return out;
+  }
+
+  (function () {
+    const B = MAC_AP;
+    const mgmt = (fc, seq, a1, a2, a3, a1n, a2n, a3n, body, extra) => P(Object.assign({
+      t: 0, src: a2, dst: a1, proto: '802.11', osi: [2], layer: 2,
+      from: a2 === MAC_STA || a2 === MAC_STA2 ? 'sta' : 'ap',
+      to: a1 === WLAN_BCAST ? 'sta2' : (a1 === MAC_STA || a1 === MAC_STA2 ? 'sta' : 'ap'),
+      layers: wlanFrame(WLAN_HDR({ fc: fc, seq: seq, a1: a1, a2: a2, a3: a3, a1n: a1n, a2n: a2n, a3n: a3n }), body)
+    }, extra || {}));
+    const ctrl = (fc, dur, ra, ta, extra) => P(Object.assign({
+      t: 0, src: ta || MAC_AP, dst: ra, proto: '802.11', osi: [2], layer: 2,
+      from: ta ? 'sta' : 'ap', to: ta ? 'ap' : 'sta',
+      layers: wlanFrame(WLAN_CTRL({ fc: fc, dur: dur, ra: ra, ta: ta }))
+    }, extra || {}));
+    const eapolHdr = (fromAp, step, seq) => WLAN_HDR({
+      fc: 'data', fl: 0x00, seq: seq, dur: 44,
+      a1: fromAp ? MAC_STA : MAC_AP, a2: fromAp ? MAC_AP : MAC_STA, a3: MAC_AP,
+      a1n: fromAp ? 'RA = STA' : 'RA = BSSID', a2n: fromAp ? 'TA = BSSID' : 'TA = SA',
+      a3n: 'BSSID'
+    });
+    const eapol = (fromAp, step, seq, extra) => P(Object.assign({
+      t: 0, src: fromAp ? MAC_AP : MAC_STA, dst: fromAp ? MAC_STA : MAC_AP,
+      proto: 'EAPOL', osi: [2], layer: 2, from: fromAp ? 'ap' : 'sta', to: fromAp ? 'sta' : 'ap',
+      layers: wlanFrame(eapolHdr(fromAp, step, seq), [WLAN_EAPOL_BODY(step)])
+    }, extra || {}));
+    const dataHdr = retry => WLAN_HDR({
+      fc: retry ? 'dataRetry' : 'data', seq: 42, dur: 44,
+      a1: MAC_AP, a2: MAC_STA, a3: MAC_DS,
+      a1n: 'RA = BSSID (To DS)', a2n: 'TA = SA', a3n: 'DA (有线侧)'
+    });
+
+    const M = [
+      mgmt('beacon', 10, WLAN_BCAST, B, B, 'RA (广播)', 'TA = BSSID', 'BSSID', [WLAN_BEACON_BODY()], {
+        t: 0.000, proto: '802.11', kind: 'beacon', phase: '扫描与发现', title: 'Beacon · AP 周期广播',
+        info: 'SSID=ZJGSU-Lab · CH 6 · 100 TU · WPA2/CCMP',
+        note: 'AP 每 102.4 ms 广播一次 Beacon，携带 SSID、信道、速率集与 RSN 安全套件。它是广播管理帧，不需要 ACK；站点靠它被动发现网络并完成时钟同步。'
+      }),
+      mgmt('probeReq', 11, WLAN_BCAST, MAC_STA, WLAN_BCAST, 'RA (广播)', 'TA = SA', 'BSSID', [WLAN_PROBE_REQ_BODY()], {
+        t: 0.014, proto: '802.11', kind: 'probe', phase: '扫描与发现', title: 'Probe Request · 主动扫描',
+        info: 'Wildcard SSID · 请求范围内所有 AP 应答',
+        note: '客户端不想等 Beacon 时主动发 Probe Request。SSID 长度为 0 表示通配，范围内所有 AP 都会回 Probe Response；这也意味着终端会暴露曾经连接过的网络名。'
+      }),
+      mgmt('probeResp', 12, MAC_STA, B, B, 'RA = STA', 'TA = BSSID', 'BSSID', [WLAN_BEACON_BODY()], {
+        t: 0.016, proto: '802.11', kind: 'probe', phase: '扫描与发现', title: 'Probe Response · AP 应答',
+        info: 'SSID=ZJGSU-Lab · CH 6 · RSSI -48 dBm',
+        note: 'Probe Response 的帧体与 Beacon 基本一致，只是单播发给提问的站点，并且必须等 ACK。站点据此比较信号强度，决定要加入哪个 BSS。'
+      }),
+      mgmt('auth', 13, B, MAC_STA, B, 'RA = BSSID', 'TA = SA', 'BSSID', [WLAN_AUTH_BODY(1, 0)], {
+        t: 0.021, proto: '802.11', kind: 'auth', phase: '认证与关联', title: 'Authentication · 第 1 步',
+        info: 'Open System · Transaction Seq 1',
+        note: '802.11 状态机的第一步：开放系统认证实际上不做身份校验，只是走完「请求 → 应答」两步。真正的安全由后面的 WPA2 四次握手完成。'
+      }),
+      mgmt('auth', 14, MAC_STA, B, B, 'RA = STA', 'TA = BSSID', 'BSSID', [WLAN_AUTH_BODY(2, 0)], {
+        t: 0.023, proto: '802.11', kind: 'auth', phase: '认证与关联', title: 'Authentication · 第 2 步成功',
+        info: 'Open System · Seq 2 · Status 0 (Success)',
+        note: '状态码 0 表示认证通过，站点进入「已认证、未关联」状态，接下来才能发 Association Request。'
+      }),
+      mgmt('assocReq', 15, B, MAC_STA, B, 'RA = BSSID', 'TA = SA', 'BSSID', [WLAN_ASSOC_BODY(false)], {
+        t: 0.027, proto: '802.11', kind: 'assoc', phase: '认证与关联', title: 'Association Request',
+        info: 'SSID=ZJGSU-Lab · Listen Interval 10 · 支持速率',
+        note: '站点声明自己的能力、SSID 与省电唤醒周期，请求加入 BSS。AP 会检查速率集、能力位与鉴权状态是否匹配。'
+      }),
+      mgmt('assocResp', 16, MAC_STA, B, B, 'RA = STA', 'TA = BSSID', 'BSSID', [WLAN_ASSOC_BODY(true, 1)], {
+        t: 0.029, proto: '802.11', kind: 'assoc', phase: '认证与关联', title: 'Association Response · AID=1',
+        info: 'Status 0 (Success) · AID 1 · 已关联',
+        note: 'AP 分配关联 ID（AID）并确认能力集合，站点进入「已关联」状态。AID 用于后面省电模式的 TIM 位图索引。'
+      }),
+      eapol(true, 1, 17, { t: 0.034, kind: 'eapol', phase: 'WPA2 四次握手', title: 'EAPOL-Key 1/4 · AP → STA',
+        info: 'ANonce · PMK 已知，等待 STA 生成 SNonce',
+        note: 'AP 先发一个随机数 ANonce。双方各自持有预共享密钥派生的 PMK，但此时还没有会话密钥 PTK。' }),
+      eapol(false, 2, 18, { t: 0.036, kind: 'eapol', phase: 'WPA2 四次握手', title: 'EAPOL-Key 2/4 · STA → AP',
+        info: 'SNonce + MIC · 双方据 ANonce/SNonce/MAC 派生 PTK',
+        note: '站点生成 SNonce，用 PMK + 两个 Nonce + 双方 MAC 派生 PTK，并附上 MIC 让 AP 验证自己确实持有 PMK。' }),
+      eapol(true, 3, 19, { t: 0.038, kind: 'eapol', phase: 'WPA2 四次握手', title: 'EAPOL-Key 3/4 · AP → STA',
+        info: 'GTK + MIC + Install · 下发组播密钥',
+        note: 'AP 校验 MIC 通过后下发组密钥 GTK，并置 Install 位，通知站点安装 PTK / GTK。' }),
+      eapol(false, 4, 20, { t: 0.040, kind: 'eapol', phase: 'WPA2 四次握手', title: 'EAPOL-Key 4/4 · STA → AP',
+        info: 'Final ACK · 双方安装密钥，后续数据加密',
+        note: '站点回最后一条确认，握手完成。此后所有单播数据帧的 Protected 位置 1，帧体用 CCMP 加密。' }),
+      ctrl('rts', 300, B, MAC_STA, { t: 0.052, kind: 'rts', phase: '信道争用与确认', title: 'RTS · 请求发送',
+        info: 'RA=BSSID · TA=STA · Duration 300 μs (NAV)',
+        note: '可选的 RTS/CTS 握手：发送方先用一个 20 B 短帧预约信道，Duration 覆盖 CTS + DATA + ACK 整段。隐藏节点听不到发送方，但能听到 AP 回的 CTS，因此会按 NAV 静默。' }),
+      ctrl('cts', 260, MAC_STA, null, { t: 0.054, kind: 'cts', phase: '信道争用与确认', title: 'CTS · 允许发送',
+        info: 'RA=STA · Duration 260 μs · 周围站点设置 NAV',
+        note: 'AP 在 SIFS 后回 14 B 的 CTS，广播式地告诉覆盖范围内所有站点「接下来 260 μs 别发」。这就是虚拟载波侦听（NAV）。' }),
+      P({ t: 0.058, src: MAC_STA, dst: MAC_AP, proto: '802.11', kind: 'wdata', phase: '信道争用与确认',
+        title: 'DATA · STA → AP (To DS=1)', info: 'Seq 42 · To DS=1 · LLC/SNAP + IPv4 + ICMP',
+        note: 'To DS=1 时三个地址的语义是：Addr1 = BSSID（AP 的无线口）、Addr2 = 源站点 SA、Addr3 = 真正的目的地址 DA。802.11 没有 EtherType，靠 8 字节 LLC/SNAP 指明帧体是 IPv4。',
+        osi: [2], layer: 2, from: 'sta', to: 'ap',
+        layers: wlanFrame(dataHdr(false), WLAN_DATA_BODY(1)) }),
+      ctrl('ack', 0, MAC_STA, null, { t: 0.059, kind: 'wack', phase: '信道争用与确认', title: 'ACK · 确认收到',
+        info: 'RA=STA · SIFS 10 μs 后回复 · Duration 0',
+        note: '接收端只在 SIFS（10 μs）后回一个 14 B 的 ACK。收到 ACK 才算发送成功；没有 ACK 就按 CW 翻倍规则重传。这是无线网与以太网最本质的差别。' }),
+      P({ t: 0.065, src: MAC_STA, dst: MAC_AP, proto: '802.11', kind: 'wretry', phase: '重传机制',
+        title: 'DATA 重传 · Retry=1', info: 'Seq 42（不变）· Retry=1 · CW 翻倍后重发',
+        note: '若上一条 ACK 丢失，发送方超时后把竞争窗口翻倍再争用并重发：序列号保持 42 不变、Retry 置 1，接收端据此去重。重传次数与分片/聚合机制共同决定无线链路的吞吐。',
+        osi: [2], layer: 2, from: 'sta', to: 'ap',
+        layers: wlanFrame(dataHdr(true), WLAN_DATA_BODY(1)) })
+    ];
+
+    def('wifi', {
+      name: '802.11 Wi-Fi', title: '无线接入 · CSMA/CA · 四次握手', cat: 'base',
+      sub: 'Beacon / 认证关联 / RTS-CTS / ACK', osi: 2, layer: 2,
+      nodes: ['sta', 'sta2', 'ap', 'ds'],
+      seqNodes: ['sta', 'sta2', 'ap', 'ds'],
+      links: [['sta', 'ap'], ['sta2', 'ap'], ['ap', 'ds']],
+      wirelessLinks: [['sta', 'ap'], ['sta2', 'ap']],
+      pos: { sta: { x: 200, y: 355 }, sta2: { x: 200, y: 120 }, ap: { x: 500, y: 235 }, ds: { x: 840, y: 235 } },
+      labels: {
+        sta: { name: '无线站点 STA1', en: 'Station STA1', ip: MAC_STA },
+        sta2: { name: '站点 STA2（隐藏节点）', en: 'Station STA2 (hidden)', ip: MAC_STA2 },
+        ap: { name: '无线接入点 AP', en: 'Access Point', ip: 'BSSID ' + MAC_AP },
+        ds: { name: '有线网络 / DS', en: 'Wired network / DS', ip: 'SSID ' + WLAN_SSID + ' · CH ' + WLAN_CH }
+      },
+      steps: [
+        { t: '扫描发现', d: 'Beacon 广播或 Probe 主动探测', at: 1 },
+        { t: '认证与关联', d: 'Open System 两步 + Association', at: 4 },
+        { t: '四次握手', d: 'WPA2 派生 PTK / GTK', at: 8 },
+        { t: '信道争用', d: 'DIFS + 随机退避避免冲突', at: 12 },
+        { t: 'RTS / CTS', d: 'NAV 虚拟载波侦听解决隐藏节点', at: 12 },
+        { t: 'DATA / ACK', d: 'SIFS 后回 ACK 才算成功', at: 14 },
+        { t: '重传', d: 'ACK 超时则 CW 翻倍再争用', at: 16 }
+      ],
+      desc: '802.11 把有线以太网换成共享的无线电信道：网卡无法一边发射一边监听，因此用 CSMA/CA（载波侦听多路访问 / 冲突避免）代替 CSMA/CD。站点先听 DIFS，再从竞争窗口 [0, CW] 里随机挑时隙倒数；发送后用 SIFS 优先回 ACK 来确认成功，收不到 ACK 就把 CW 翻倍重传。可选的 RTS/CTS 用 Duration 字段设置 NAV，让听不见发送方、却听得见 AP 的隐藏节点也保持静默。接入流程则是扫描 → 认证 → 关联 → WPA2 四次握手 → 加密数据。',
+      tip: '与以太网对照着看：以太网「边发边听」，冲突后靠 64 B 最短帧保证及时检出并用 BEB 退避；802.11 只能「发前避让」，靠随机退避 + ACK + NAV 间接判断成败。802.11 MAC 首部 24 B 用三个地址（RA / TA / BSSID）配合 To DS / From DS 位表达源与目的，控制帧（RTS 20 B、CTS / ACK 14 B）更短，以缩短争用开销。',
+      stats: [
+        { k: '协议标准', v: 'IEEE 802.11 · DCF' },
+        { k: '介质访问', v: 'CSMA/CA · 半双工' },
+        { k: '帧间隔', v: 'DIFS 50 / SIFS 10 / Slot 9 μs' },
+        { k: '竞争窗口', v: 'CW 15 → 31 → … → 1023' },
+        { k: '确认机制', v: '逐帧 ACK（以太网无链路层重传）' },
+        { k: '地址字段', v: '3 × MAC + To/From DS' },
+        { k: '安全机制', v: 'WPA2 四次握手 + CCMP' },
+        { k: '隐藏节点', v: 'RTS/CTS + NAV 虚拟载波侦听' }
+      ],
+      packets: M,
+      lab: { tab: 'wfLabView' }
+    });
+  })();
+
   /* ---------- 元信息 ---------- */
-  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf', 'bgp', 'tcpcc', 'switch', 'stp'];
+  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf', 'bgp', 'tcpcc', 'switch', 'stp', 'csma', 'wifi'];
   const CATEGORIES = [
     { id: 'all', zh: '全部', en: 'All' },
     { id: 'base', zh: '基础', en: 'Core' },
@@ -2178,18 +2984,30 @@
     open: '#e08a2e', keepalive: '#3aa87a', notify: '#d0483f',
     ccdata: '#2f6fd0', dupack: '#e8a317', retrans: '#d0483f',
     flood: '#e8a317', forward: '#2f6fd0', filter: '#9aa6c0', bcast: '#7c4dd6', learn: '#0f9c9c',
-    bpdu: '#1f8a9c', tcn: '#d0483f', tc: '#e08a2e', topo: '#8a93ad', swdata: '#2f9c6a'
+    bpdu: '#1f8a9c', tcn: '#d0483f', tc: '#e08a2e', topo: '#8a93ad', swdata: '#2f9c6a',
+    sense: '#8a93ad', tx: '#2f6fd0', collision: '#d0483f', jam: '#e08a2e',
+    backoff: '#7c4dd6', success: '#2f9c6a', runt: '#e8a317', late: '#d24b6a', long: '#0f9c9c',
+    beacon: '#2f8fd0', probe: '#7c4dd6', auth: '#e08a2e', assoc: '#12a08f', eapol: '#d24b6a',
+    rts: '#8a5cd6', cts: '#0f9c9c', wdata: '#2f6fd0', wack: '#2f9c6a', wretry: '#d0483f'
   };
   const KIND_ZH = { dns: 'DNS', tcp: 'TCP', request: '请求', response: '响应', ack: '纯 ACK', tls: 'TLS',
     routing: '路由报文', update: '路由更新', open: 'OPEN 协商', keepalive: '保活', notify: '会话通知',
     ccdata: '数据段', dupack: '重复 ACK', retrans: '快重传',
     flood: '未知单播泛洪', forward: '已知单播转发', filter: '同端口过滤', bcast: '广播帧', learn: '表项更新',
-    bpdu: '配置 BPDU', tcn: 'TCN BPDU', tc: 'TC 置位', topo: '拓扑事件', swdata: '用户数据帧' };
+    bpdu: '配置 BPDU', tcn: 'TCN BPDU', tc: 'TC 置位', topo: '拓扑事件', swdata: '用户数据帧',
+    sense: '载波侦听', tx: '发送帧', collision: '冲突碎片', jam: 'Jam 信号', backoff: '退避后重发',
+    success: '发送成功', runt: '过短帧', late: '迟到冲突', long: '长帧对照',
+    beacon: 'Beacon', probe: 'Probe', auth: 'Authentication', assoc: 'Association',
+    eapol: 'EAPOL-Key', rts: 'RTS', cts: 'CTS', wdata: 'DATA', wack: 'ACK', wretry: 'DATA 重传' };
   const KIND_EN = { dns: 'DNS', tcp: 'TCP', request: 'Request', response: 'Response', ack: 'Bare ACK', tls: 'TLS',
     routing: 'Routing', update: 'Route update', open: 'BGP OPEN', keepalive: 'Keepalive', notify: 'Notification',
     ccdata: 'Data segment', dupack: 'Dup ACK', retrans: 'Retransmit',
     flood: 'Unknown-unicast flood', forward: 'Known unicast', filter: 'Filtered', bcast: 'Broadcast', learn: 'MAC move',
-    bpdu: 'Config BPDU', tcn: 'TCN BPDU', tc: 'TC flag', topo: 'Topology event', swdata: 'User frame' };
+    bpdu: 'Config BPDU', tcn: 'TCN BPDU', tc: 'TC flag', topo: 'Topology event', swdata: 'User frame',
+    sense: 'Carrier sense', tx: 'Frame sent', collision: 'Collision fragment', jam: 'Jam signal',
+    backoff: 'Backoff retry', success: 'Delivered', runt: 'Runt frame', late: 'Late collision', long: 'Long frame',
+    beacon: 'Beacon', probe: 'Probe', auth: 'Authentication', assoc: 'Association',
+    eapol: 'EAPOL-Key', rts: 'RTS', cts: 'CTS', wdata: 'DATA', wack: 'ACK', wretry: 'DATA retry' };
   const OSI_NAMES = ['物理层', '数据链路层', '网络层', '传输层', '会话层', '表示层', '应用层'];
 
   global.ProtocolData = {
@@ -2201,6 +3019,9 @@
     swHosts: SW_HOSTS, swMac: SW_MAC, swPort: SW_PORT,
     stpSimulate: simulateSTP, stpDefault: STP_LAB_DEFAULT,
     stpSwitches: STP_SW, stpLinks: STP_LINKS,
+    cdSimulate: simulateCSMA, cdDefault: CD_LAB_DEFAULT, cdFrameInfo: CD_FRAME_INFO,
+    wfSimulate: simulateWifi, wfDefault: WF_LAB_DEFAULT,
+    wlanSsid: WLAN_SSID, wlanChannel: WLAN_CH,
     ipClient: IP_CLIENT, ipDns: IP_DNS, ipWeb: IP_WEB
   };
 })(window);

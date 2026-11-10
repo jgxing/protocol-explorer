@@ -249,6 +249,7 @@ html[data-theme="dark"] .proto-card.open .proto-dot{box-shadow:inset 0 0 0 2.5px
 .lab-note{font-size:9.5px;line-height:1.5;color:var(--muted);background:var(--blue-softer);border:1px solid var(--line-2);border-radius:4px;padding:7px 8px}
 .lab-ctrl{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .lab-ctrl label{display:flex;flex-direction:column;gap:3px;font-size:9.5px;color:var(--muted);min-width:0}
+.lab-ctrl label.wide{grid-column:1/-1}
 .lab-ctrl select{width:100%;font:600 10.5px var(--sans);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:4px 5px;outline:none}
 .lab-ctrl select:focus{border-color:var(--blue)}
 .lab-btns{display:flex;gap:5px}
@@ -322,6 +323,37 @@ html[data-theme="dark"] .proto-card.open .proto-dot{box-shadow:inset 0 0 0 2.5px
 .xl-tl-t{font:700 9.5px var(--mono);fill:var(--ink-2);stroke:none;text-anchor:middle}
 .xl-tl-g.on .xl-tl-t{fill:#fff}
 .xl-tl-g:hover .xl-tl{stroke:var(--blue-2);stroke-width:1.6}
+
+/* 时隙泳道图：CSMA/CD 共享总线与 802.11 无线信道共用 */
+.lane-name{font:700 10px var(--sans);fill:var(--ink-2);stroke:none}
+.lane-ruler{font:600 9px var(--mono);fill:var(--muted);stroke:none}
+.lane-ruler.cur{fill:var(--blue);font-weight:800}
+.lane-bg{fill:var(--panel-2);stroke:var(--line-2);stroke-width:1}
+.lane-bg.med{fill:var(--blue-softer);stroke:var(--line)}
+.lane-g{cursor:pointer}
+.lane-cell{fill:var(--panel-2);stroke:var(--line-2);stroke-width:1}
+.lane-cell:not(.on){opacity:.42}
+.lane-cell.now{stroke:var(--blue);stroke-width:2}
+.lane-cell.s-idle{fill:var(--panel-2)}
+.lane-cell.s-tx{fill:color-mix(in srgb,var(--blue) 24%,var(--panel))}
+.lane-cell.s-collision{fill:color-mix(in srgb,var(--red) 28%,var(--panel))}
+.lane-cell.s-jam,.lane-cell.s-nav{fill:color-mix(in srgb,var(--amber) 28%,var(--panel))}
+.lane-cell.s-backoff{fill:color-mix(in srgb,var(--purple) 22%,var(--panel))}
+.lane-cell.s-frozen{fill:color-mix(in srgb,var(--purple) 11%,var(--panel))}
+.lane-cell.s-wait{fill:color-mix(in srgb,var(--blue) 12%,var(--panel))}
+.lane-cell.s-teal{fill:color-mix(in srgb,var(--teal) 25%,var(--panel))}
+.lane-cell.s-success{fill:color-mix(in srgb,var(--green) 25%,var(--panel))}
+.lane-cell-t{font:700 8px var(--mono);fill:var(--ink-2);stroke:none}
+.lane-g:hover .lane-cell{stroke:var(--blue-2);stroke-width:1.8}
+.lane-bar-bg{fill:var(--panel-2);stroke:var(--line);stroke-width:1}
+.lane-bar-c{fill:color-mix(in srgb,var(--blue) 42%,var(--panel));stroke:none}
+.lane-bar-f{fill:color-mix(in srgb,var(--green) 45%,var(--panel));stroke:none}
+.lane-bar-f.bad{fill:color-mix(in srgb,var(--red) 48%,var(--panel))}
+.lane-seg{fill:var(--panel-2);stroke:var(--line);stroke-width:1}
+.lane-seg.on{fill:var(--blue);stroke:var(--blue)}
+.lane-seg-t{font:700 9px var(--mono);fill:var(--ink-2);stroke:none}
+.lane-seg.on + .lane-seg-t{fill:#fff}
+.link-line.wireless{stroke-dasharray:2 6;stroke-width:2.2;opacity:.85}
 
 /* 实验侧栏：自定义帧、转发表、端口角色 */
 .xl-custom{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
