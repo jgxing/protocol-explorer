@@ -271,6 +271,81 @@ html[data-theme="dark"] .proto-card.open .proto-dot{box-shadow:inset 0 0 0 2.5px
 .lab-log-item.cur{background:var(--blue-softer);border-left-color:var(--blue)}
 .lab-empty{font-size:10px;color:var(--muted);font-style:italic}
 
+/* ---------------- 二层实验（自学习 / 生成树）通用图形 ---------------- */
+.xl-chart-title{font:700 11px var(--sans);fill:var(--ink-2);stroke:none}
+.xl-tick{font:500 9.5px var(--mono);fill:var(--muted);stroke:none}
+.xl-link{fill:none;stroke:var(--link);stroke-width:2;stroke-linecap:round}
+.xl-link.on{stroke:var(--blue);stroke-width:2.6}
+.xl-link.focus{stroke-width:3.6}
+.xl-link.in{stroke:var(--blue-2);stroke-width:3.4}
+.xl-link.out{stroke:var(--green);stroke-width:3.4}
+.xl-link.outflood{stroke:var(--amber);stroke-width:3;stroke-dasharray:8 5}
+.xl-link.blk{stroke:var(--red);stroke-width:2.4;stroke-dasharray:7 6}
+.xl-link.fail{stroke:var(--muted);stroke-width:1.8;stroke-dasharray:3 6;opacity:.65}
+.xl-arrow{stroke:none}
+.xl-cross{fill:none;stroke:var(--red);stroke-width:2.6;stroke-linecap:round}
+.xl-cross-t{font:700 9.5px var(--sans);fill:var(--red);stroke:none}
+.xl-sw-box{fill:var(--blue-softer);stroke:var(--blue);stroke-width:2}
+.xl-sw-title{font:800 17px var(--sans);fill:var(--blue);stroke:none}
+.xl-learn{font:600 9.5px var(--mono);fill:var(--ink-2);stroke:none}
+.xl-port{fill:var(--panel);stroke:var(--link);stroke-width:1.8}
+.xl-port.on{fill:var(--blue);stroke:var(--blue)}
+.xl-port-t{font:700 8.5px var(--mono);fill:var(--ink-2);stroke:none}
+.xl-port.on + .xl-port-t{fill:#fff}
+.xl-node{fill:var(--panel);stroke:var(--link);stroke-width:1.8}
+.xl-node.src{stroke:var(--blue-2);stroke-width:2.6}
+.xl-node.dst{stroke:var(--green);stroke-width:2.6}
+.xl-node.root{stroke:var(--amber);stroke-width:3}
+.xl-node.focus{stroke:var(--blue-2);stroke-width:3}
+.xl-node.host{fill:var(--panel-2)}
+.xl-node-t{font:700 11.5px var(--sans);fill:var(--ink);stroke:none;text-anchor:middle}
+.xl-node-s{font:600 8.5px var(--mono);fill:var(--muted);stroke:none;text-anchor:middle}
+.xl-badge{fill:var(--panel);stroke-width:1.6}
+.xl-badge-t{font:800 11px var(--sans);stroke:none;text-anchor:middle}
+.xl-root-badge{fill:var(--amber);stroke:none}
+.xl-root-t{font:800 9px var(--mono);fill:#fff;stroke:none}
+.xl-role-line{font:700 9px var(--mono);fill:var(--ink-2);stroke:none}
+.xl-link-t{font:700 9px var(--sans);fill:var(--red);stroke:none}
+.xl-role-dot{fill:var(--panel);stroke:var(--blue);stroke-width:1.6}
+.xl-role-dot.r-RP{fill:var(--blue-soft);stroke:var(--blue)}
+.xl-role-dot.r-ALT{fill:color-mix(in srgb,var(--red) 14%,var(--panel));stroke:var(--red)}
+.xl-role-dot.r-DOWN{fill:var(--panel-2);stroke:var(--muted)}
+.xl-role-dot-t{font:700 8px var(--mono);fill:var(--blue);stroke:none}
+.xl-role-dot.r-ALT + .xl-role-dot-t{fill:var(--red)}
+.xl-tcn{fill:none;stroke:var(--amber);stroke-width:2.4;stroke-dasharray:6 5}
+.xl-lg{fill:var(--blue);stroke:none}
+.xl-lg.blk{fill:var(--red)}
+.xl-lg.fail{fill:var(--muted)}
+.xl-tl{fill:var(--panel-2);stroke:var(--line);stroke-width:1}
+.xl-tl-g{cursor:pointer}
+.xl-tl-g.on .xl-tl{fill:var(--blue);stroke:var(--blue)}
+.xl-tl-t{font:700 9.5px var(--mono);fill:var(--ink-2);stroke:none;text-anchor:middle}
+.xl-tl-g.on .xl-tl-t{fill:#fff}
+.xl-tl-g:hover .xl-tl{stroke:var(--blue-2);stroke-width:1.6}
+
+/* 实验侧栏：自定义帧、转发表、端口角色 */
+.xl-custom{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.xl-custom label{display:flex;flex-direction:column;gap:3px;font-size:9px;color:var(--muted);min-width:0}
+.xl-custom select{width:100%;font:600 10px var(--sans);color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:4px 3px;outline:none}
+.xl-custom select:focus{border-color:var(--blue)}
+.xl-send{width:100%;padding:6px 8px;font-size:10.5px;font-weight:700;color:var(--blue);background:var(--blue-soft);border:1px solid var(--line);border-radius:4px}
+.xl-send:hover{border-color:var(--blue)}
+.xl-table-title{font-size:10px;font-weight:700;color:var(--ink-2);letter-spacing:.4px;margin-top:2px}
+.xl-table{width:100%;border-collapse:collapse;font:600 9.5px var(--mono);color:var(--ink-2)}
+.xl-table th{text-align:left;font:700 9px var(--sans);color:var(--muted);padding:4px 5px;border-bottom:1px solid var(--line)}
+.xl-table td{padding:4px 5px;border-bottom:1px solid var(--line-2)}
+.xl-table td:first-child{color:var(--blue)}
+.xl-table tr.hit td{background:var(--blue-softer);font-weight:800}
+.xl-empty{text-align:center;color:var(--muted);font-style:italic;padding:8px 0}
+.xl-roles{display:flex;flex-direction:column;gap:5px}
+.xl-role-row{display:flex;align-items:center;gap:6px;font-size:9.5px}
+.xl-role-row b{flex:none;width:38px;font:700 10px var(--mono);color:var(--ink-2)}
+.xl-role-row span{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
+.xl-role{display:inline-block;font:700 8.5px var(--mono);padding:2px 5px;border-radius:3px;background:var(--blue-soft);color:var(--blue);border:1px solid var(--line-2)}
+.xl-role.r-RP{background:var(--blue);color:#fff;border-color:var(--blue)}
+.xl-role.r-ALT{background:color-mix(in srgb,var(--red) 12%,var(--panel));color:var(--red);border-color:var(--red)}
+.xl-role.r-DOWN{background:var(--panel-2);color:var(--muted)}
+
 /* network svg parts */
 .link-line{stroke:var(--link-dim);stroke-width:1.6;stroke-dasharray:6 7;fill:none;transition:stroke .3s,stroke-width .3s}
 .link-line.active{stroke:var(--blue-2);stroke-width:2.2;stroke-dasharray:6 5;animation:dash 1s linear infinite}
@@ -478,6 +553,8 @@ html[data-theme="dark"] td.c-proto span{filter:brightness(.75)}
   .legend .lg:nth-child(n+5){display:none}
   .lab-wrap{grid-template-columns:minmax(0,1fr) 236px}
   .lab-side{padding:9px 10px 12px;gap:8px}
+  .xl-custom{gap:4px}
+  .xl-role-row b{width:32px}
 }
 @media (max-height:760px){
   .stage{grid-template-rows:minmax(0,1fr) 204px}
@@ -487,4 +564,7 @@ html[data-theme="dark"] td.c-proto span{filter:brightness(.75)}
   .lab-metric{padding:4px 7px}
   .lab-explain{max-height:58px;font-size:9.5px}
   .lab-log{min-height:48px;max-height:96px}
+  .xl-table td,.xl-table th{padding:3px 4px}
+  .xl-roles{gap:3px}
+  .xl-send{padding:5px 7px}
 }

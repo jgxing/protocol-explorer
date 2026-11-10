@@ -26,7 +26,8 @@
     dns: '#7c4dd6', http: '#dd9a12', tls: '#d24b6a', data: '#6b7aa5',
     arp: '#8a5cd6', icmp: '#0f9c9c', dhcp: '#7c4dd6', ws: '#dd9a12',
     quic: '#c04a8e', payload: '#7b89ad', smtp: '#dd9a12', ftp: '#dd9a12',
-    rip: '#e07b1f', ospf: '#2f9c6a', bgp: '#a83f8f'
+    rip: '#e07b1f', ospf: '#2f9c6a', bgp: '#a83f8f',
+    llc: '#5b6bb5', stp: '#1f8a9c'
   };
 
   const MAC_CLIENT = '08:00:5e:5d:52:81';
@@ -37,6 +38,14 @@
   const IP_WEB = '203.0.113.10';
   const IP_MAIL = '198.51.100.25';
   const IP_FTP = '198.51.100.40';
+
+  /* 二层实验：主机 / 交换机地址 */
+  const MAC_BCAST = 'ff:ff:ff:ff:ff:ff';
+  const MAC_STP_MCAST = '01:80:c2:00:00:00';
+  const MAC_A = '00:1a:2b:3c:4d:01', MAC_B = '00:1a:2b:3c:4d:02';
+  const MAC_C = '00:1a:2b:3c:4d:03', MAC_D = '00:1a:2b:3c:4d:04';
+  const IP_A = '192.168.1.11', IP_B = '192.168.1.12', IP_C = '192.168.1.13', IP_D = '192.168.1.14';
+  const MAC_SW1 = '00:1c:0e:11:11:11', MAC_SW2 = '00:1c:0e:22:22:22', MAC_SW3 = '00:1c:0e:33:33:33';
 
   /* ---------- 层构造器 ---------- */
   const L = (key, name, short, color, bytes, fields) => ({ key, name, short, color, bytes, fields });
@@ -558,6 +567,82 @@
   const bgpFrame = (src, dst, sp, dp, seq, ack, flags, flagLabel, app, opts) =>
     frame(src, dst, 6, '6 (TCP)',
       tcpTo(sp, dp, seq, ack, flags, flagLabel, Object.assign({ service: 'bgp' }, opts)), app, opts);
+
+  /* ---------- 二层实验层构造器：802.3 / LLC / STP BPDU ---------- */
+  // 802.1D 的 BPDU 封装在 802.3 帧里：Length 字段（≤1500）而非 EtherType，
+  // 后面接 3 字节 LLC 首部 DSAP=SSAP=0x42、Control=0x03。
+  function ETH8023(dst, src, len) {
+    const l = L('eth', 'Ethernet 802.3', 'ETH', C.eth,
+      [...U.mac(dst), ...U.mac(src), ...U.u16(len)],
+      [
+        F('目的地址', dst, 0, 6,
+          '01:80:C2:00:00:00 是 IEEE 802.1D 保留的桥组播地址：只有启用了生成树的交换机端口才会接收并处理，普通主机网卡直接丢弃。'),
+        F('源地址', src, 6, 6,
+          '发送该 BPDU 的交换机端口 MAC。网桥据此比较 Bridge ID，并与「根桥 ID」区分开来。'),
+        F('长度 Length', len + ' 字节 (0x' + len.toString(16) + ')', 12, 2,
+          '802.3 帧该字段 ≤ 1500 时表示后续数据长度，不是 EtherType；此处长度 = LLC 3 字节 + BPDU ' + (len - 3) + ' 字节。')
+      ]);
+    l.note = 'BPDU 不走 IP：它封装在 802.3 + LLC 帧里，只在同一个二层广播域内逐跳传递，因此 STP 是纯粹的链路层协议。';
+    return l;
+  }
+  function LLC_STP() {
+    return L('llc', 'LLC 首部', 'LLC', C.llc, [0x42, 0x42, 0x03], [
+      F('DSAP', '0x42 (STP)', 0, 1, '目的服务访问点：0x42 是 IEEE 802.1 为生成树协议保留的值。'),
+      F('SSAP', '0x42 (STP)', 1, 1, '源服务访问点，同为 0x42。'),
+      F('控制字段', '0x03 (UI 无编号信息)', 2, 1, '无连接、无确认的 UI 帧；BPDU 紧跟其后，不需要建立 LLC 会话。')
+    ]);
+  }
+  // 802.1D 配置 BPDU：35 字节。Root ID / Bridge ID 各 8 字节 = 2 字节优先级 + 6 字节 MAC。
+  function STP_CONFIG(o) {
+    const rootPri = o.rootPri, rootMac = o.rootMac, cost = o.cost;
+    const brPri = o.brPri, brMac = o.brMac;
+    const port = o.port, flags = o.flags || 0;
+    const msgAge = o.msgAge == null ? 0 : o.msgAge;
+    const maxAge = o.maxAge == null ? 20 : o.maxAge;
+    const hello = o.hello == null ? 2 : o.hello;
+    const fwd = o.fwd == null ? 15 : o.fwd;
+    const bytes = [0x00, 0x00, 0x00, 0x00, flags,
+      ...U.u16(rootPri), ...U.mac(rootMac), ...U.u32(cost),
+      ...U.u16(brPri), ...U.mac(brMac), ...U.u16(port),
+      ...U.u16(msgAge), ...U.u16(maxAge), ...U.u16(hello), ...U.u16(fwd)];
+    const l = L('stp', 'STP 配置 BPDU', 'BPDU', C.stp, bytes, [
+      F('协议标识 Protocol ID', '0x0000 (Spanning Tree)', 0, 2, '固定为 0，表示 IEEE 802.1D 生成树协议。'),
+      F('协议版本 Version', '0 (802.1D STP)', 2, 1, '0 = 经典 STP；2 = RSTP (802.1w)；3 = MSTP (802.1s)。'),
+      F('BPDU 类型 Type', '0x00 (Configuration BPDU)', 3, 1, '0x00 为配置 BPDU；0x80 为拓扑变化通知 TCN BPDU。'),
+      F('标志 Flags', '0x' + flags.toString(16) + (flags & 1 ? ' · TC 置位' : ' · 无 TC'), 4, 1,
+        '最低位 TC（Topology Change）由根桥置位，通知全网把 MAC 表老化时间从 300 s 缩短为 Forward Delay（15 s）；最高位 TCA 用于确认 TCN。'),
+      F('根桥 ID Root ID', rootPri + ':' + rootMac, 5, 8,
+        '2 字节优先级 + 6 字节 MAC。比较时先比优先级（默认 32768，必须为 4096 的倍数），相同再比 MAC，越小越优先。'),
+      F('根路径开销 Root Path Cost', String(cost), 13, 4,
+        '从本端口到根桥的累计链路开销。802.1D 经典值：10 Mbps=100、100 Mbps=19、1 Gbps=4、10 Gbps=2；根桥发出的 BPDU 该值为 0。'),
+      F('发送桥 ID Bridge ID', brPri + ':' + brMac, 17, 8,
+        '发出这条 BPDU 的交换机 ID，用于同一网段上指定端口选举的平局判定。'),
+      F('端口 ID Port ID', '0x' + port.toString(16) + ' (优先级 ' + (port >> 12) + ' / 端口 ' + (port & 0xfff) + ')', 25, 2,
+        '高 4 位端口优先级、低 12 位端口号；当根路径开销与 Bridge ID 都相同时，用端口 ID 打破平局。'),
+      F('Message Age', msgAge + ' s', 27, 2,
+        'BPDU 从根桥发出后每经过一台交换机加 1；达到 Max Age 即认为该信息过期。这里是' +
+        (msgAge >= 20 ? ' 20 s，已达 Max Age，SW2 判定根桥失联。' : ' 0 s，刚由根桥或上游网桥刷新。')),
+      F('Max Age', maxAge + ' s', 29, 2, 'BPDU 最大存活时间，默认 20 s；超时未收到根桥 BPDU 就判定拓扑变化。'),
+      F('Hello Time', hello + ' s', 31, 2, '根桥发送配置 BPDU 的周期，默认 2 s；非根桥只是在根端口收到后转发。'),
+      F('Forward Delay', fwd + ' s', 33, 2,
+        'Listening 与 Learning 各停留 15 s，共 30 s，确保新拓扑的 BPDU 有时间传遍全网，避免临时环路。')
+    ]);
+    l.note = '配置 BPDU 固定 35 字节。交换机只在「指定端口」上发送它，根端口只接收；被阻塞的端口仍要监听 BPDU，以便故障时及时接管。';
+    return l;
+  }
+  // 拓扑变化通知 BPDU：只有 4 字节，由检测到变化的交换机从根端口向上游逐跳送到根桥。
+  function STP_TCN() {
+    const l = L('stp', 'STP TCN BPDU', 'TCN', C.stp, [0x00, 0x00, 0x00, 0x80], [
+      F('协议标识 Protocol ID', '0x0000 (Spanning Tree)', 0, 2, '与配置 BPDU 一致。'),
+      F('协议版本 Version', '0 (802.1D STP)', 2, 1, '经典 STP 版本号。'),
+      F('BPDU 类型 Type', '0x80 (Topology Change Notification)', 3, 1,
+        'TCN 不含任何拓扑细节，只是「我这里变了」的通告；上游用 TCA 确认，根桥再用 TC 标志通知全网。')
+    ]);
+    l.note = 'TCN BPDU 只有 4 字节；802.3 帧不足 64 字节最小长度时会由网卡补 0 填充，抓包里常见的 Padding 即来源于此。';
+    return l;
+  }
+  const stpFrame = (src, bpdu) =>
+    [ETH8023(MAC_STP_MCAST, src, 3 + bpdu.bytes.length), LLC_STP(), bpdu];
 
   /* ---------- 场景数据 ---------- */
   const S = {};
@@ -1609,8 +1694,478 @@
     });
   })();
 
+  /* ============================================================
+     19 · 交换机 / 网桥自学习算法
+     共享仿真内核：按「源地址学习 → 目的地址查表 → 泛洪/转发/过滤」推进，
+     每一帧都会生成当时的转发表快照，课程抓包与实验台共用同一套帧序列。
+     ============================================================ */
+  const SW_HOSTS = ['A', 'B', 'C', 'D'];
+  const SW_MAC = { A: MAC_A, B: MAC_B, C: MAC_C, D: MAC_D, FF: MAC_BCAST };
+  const SW_IP = { A: IP_A, B: IP_B, C: IP_C, D: IP_D };
+  const SW_PORT = { A: 1, B: 2, C: 3, D: 4 };
+  const SW_HOST_NODE = { A: 'ha', B: 'hb', C: 'hc', D: 'hd' };
+  const SW_PORT_NODE = ['', 'ha', 'hb', 'hc', 'hd'];
+  const SW_LAB_DEFAULT = { script: 'learn', aging: 'off' };
+
+  const SW_SCRIPTS = {
+    learn: [
+      { src: 'A', dst: 'B' },
+      { src: 'B', dst: 'A' },
+      { src: 'A', dst: 'C' },
+      { src: 'C', dst: 'A' },
+      { src: 'A', dst: 'B', in: 1, dstPort: 1 },
+      { src: 'A', dst: 'FF' },
+      { src: 'B', dst: 'A', arp: true },
+      { src: 'A', dst: 'B', in: 3, move: true },
+      { src: 'B', dst: 'A' }
+    ],
+    aging: [
+      { src: 'A', dst: 'B' },
+      { src: 'B', dst: 'A' },
+      { src: 'C', dst: 'D' },
+      { src: 'D', dst: 'C' },
+      { src: 'A', dst: 'B', idle: true },
+      { src: 'B', dst: 'A' },
+      { src: 'A', dst: 'C' },
+      { src: 'C', dst: 'A' },
+      { src: 'B', dst: 'A' }
+    ],
+    move: [
+      { src: 'A', dst: 'B' },
+      { src: 'B', dst: 'A' },
+      { src: 'C', dst: 'A' },
+      { src: 'A', dst: 'B', in: 3, move: true },
+      { src: 'B', dst: 'A' },
+      { src: 'C', dst: 'A' },
+      { src: 'A', dst: 'D', in: 3 },
+      { src: 'D', dst: 'A' },
+      { src: 'B', dst: 'A' }
+    ]
+  };
+
+  function simulateSwitch(cfg) {
+    const o = Object.assign({}, SW_LAB_DEFAULT, cfg || {});
+    const frames = (o.frames || SW_SCRIPTS[o.script] || SW_SCRIPTS.learn).slice();
+    const agingOn = o.aging === 'short' || o.script === 'aging';
+    const table = {};                       // mac -> { port, at }
+    const out = [];
+    let floods = 0, forwards = 0, filters = 0, learns = 0;
+
+    frames.forEach((f, i) => {
+      const inPort = f.in || SW_PORT[f.src];
+      const r = i + 1;
+      const srcMac = SW_MAC[f.src];
+      const dstMac = f.dst === 'FF' ? MAC_BCAST : SW_MAC[f.dst];
+
+      // 表项老化：默认 300 s；实验里用「隔 2 帧未刷新即过期」模拟长空闲
+      if (agingOn) Object.keys(table).forEach(m => { if (r - 1 - table[m].at >= 2) delete table[m]; });
+
+      // ① 源地址学习（永远只看源 MAC 与入端口，与目的地址无关）
+      let learn = 'refresh';
+      if (!table[srcMac]) { table[srcMac] = { port: inPort, at: i }; learn = 'add'; learns++; }
+      else if (table[srcMac].port !== inPort) { table[srcMac] = { port: inPort, at: i }; learn = 'move'; learns++; }
+      else table[srcMac].at = i;
+
+      // ② 目的地址查表，决定泛洪 / 单播转发 / 过滤
+      let action, egress = [], hitPort = null;
+      if (f.dst === 'FF') {
+        action = 'bcast';
+        egress = [1, 2, 3, 4].filter(p => p !== inPort); floods++;
+      } else if (f.dstPort != null) {
+        hitPort = f.dstPort;
+        if (hitPort === inPort) { action = 'filter'; filters++; }
+        else { action = 'forward'; egress = [hitPort]; forwards++; }
+      } else {
+        const e = table[dstMac];
+        if (!e) { action = 'flood'; egress = [1, 2, 3, 4].filter(p => p !== inPort); floods++; }
+        else if (e.port === inPort) { action = 'filter'; hitPort = e.port; filters++; }
+        else { action = 'forward'; hitPort = e.port; egress = [hitPort]; forwards++; }
+      }
+
+      const snap = Object.keys(table).map(m => {
+        const host = SW_HOSTS.find(h => SW_MAC[h] === m) || m.slice(-2);
+        return { mac: m, host: host, port: table[m].port, age: i - table[m].at };
+      }).sort((a, b) => a.port - b.port);
+
+      const plist = egress.length ? 'P' + egress.join(' / P') : '无';
+      const lz = learn === 'add' ? '转发表里没有这个源地址 → 学习并记录 ' + srcMac + ' ↔ P' + inPort + '。' :
+        learn === 'move' ? '同一源地址却从新端口出现（主机迁移）→ 覆盖旧表项为 P' + inPort + '。' :
+          '源地址已在表中且端口未变 → 只刷新老化计时器。';
+      const le = learn === 'add' ? 'The source MAC is unknown, so the switch learns ' + srcMac + ' ↔ P' + inPort + '. ' :
+        learn === 'move' ? 'A known source MAC now appears on a new port (host moved), so the entry is overwritten to P' + inPort + '. ' :
+          'The source MAC already exists on the same port; only its aging timer is refreshed. ';
+      const az = {
+        flood: '目的 ' + dstMac + ' 不在表中（未知单播），只能向除入端口外的所有端口泛洪：' + plist + '。',
+        forward: '目的 ' + dstMac + ' 命中表项 P' + hitPort + '，只从该端口单播转发，其它端口收不到这个帧。',
+        filter: '目的端口与入端口同为 P' + inPort + '（同一共享网段），交换机直接过滤丢弃，不再转发。',
+        bcast: '目的为广播地址 ' + MAC_BCAST + '，向除入端口外的所有端口泛洪：' + plist + '。'
+      }[action];
+      const ae = {
+        flood: 'The destination ' + dstMac + ' is unknown (unknown unicast), so the frame is flooded to every port except the ingress port: ' + plist + '.',
+        forward: 'The destination ' + dstMac + ' matches entry P' + hitPort + ', so the frame is forwarded out that single port only. Other ports never see it.',
+        filter: 'Destination port equals the ingress port P' + inPort + ' (same shared segment), so the bridge filters and drops the frame.',
+        bcast: 'A broadcast destination ' + MAC_BCAST + ' is always flooded to every port except the ingress port: ' + plist + '.'
+      }[action];
+
+      // 与课程抓包表对应：默认脚本按序号一一对应；自定义帧按「源/目的/入端口」找最相近的抓包行
+      let p = -1;
+      const list = S.switch && S.switch.packets;
+      if (list) {
+        if (!o.frames) p = i < list.length ? i : -1;
+        else p = list.findIndex(q => q.f && q.f.src === f.src && q.f.dst === f.dst &&
+          (q.f.in || SW_PORT[q.f.src]) === inPort && !!q.f.arp === !!f.arp);
+        if (p < 0 && list.length) p = Math.min(i, list.length - 1);
+      }
+
+      out.push({
+        r: r, frame: f, inPort: inPort, egress: egress, action: action, learn: learn,
+        table: snap, srcMac: srcMac, dstMac: dstMac, floods: floods, forwards: forwards,
+        filters: filters, learns: learns, agingOn: agingOn,
+        p: p >= 0 ? p : undefined,
+        zh: '帧 ' + r + '：端口 P' + inPort + ' 收到 ' + srcMac + ' → ' + dstMac + '。' + lz + az +
+          (agingOn ? ' 本实验开启了短老化：超过 2 帧未刷新的表项已被删除，因此可能出现本可命中却再次泛洪的情况。' : ''),
+        en: 'Frame ' + r + ': port P' + inPort + ' receives ' + srcMac + ' → ' + dstMac + '. ' + le + ae +
+          (agingOn ? ' Short aging is enabled: entries not refreshed for 2 frames expire, so a previously known destination may be flooded again.' : '')
+      });
+    });
+    return out;
+  }
+
+  (function () {
+    const swLayers = f => {
+      let ls;
+      if (f.dst === 'FF') {
+        ls = [ETH(MAC_BCAST, SW_MAC[f.src], 0x0806, '0x0806 (ARP)'),
+          ARP(1, SW_MAC[f.src], SW_IP[f.src], '00:00:00:00:00:00', IP_B)];
+      } else if (f.arp) {
+        ls = [ETH(SW_MAC[f.dst], SW_MAC[f.src], 0x0806, '0x0806 (ARP)'),
+          ARP(2, SW_MAC[f.src], SW_IP[f.src], SW_MAC[f.dst], SW_IP[f.dst])];
+      } else {
+        const ic = ICMP(8, 0, 'Echo Request', 0x0b21, 1);
+        ls = [ETH(SW_MAC[f.dst], SW_MAC[f.src], 0x0800, '0x0800 (IPv4)'),
+          IPV4(SW_IP[f.src], SW_IP[f.dst], 1, '1 (ICMP)', ic.bytes.length), ic];
+      }
+      ls[0].note = '以太网帧只有源 / 目的 MAC，没有任何「端口号」字段：交换机把帧从哪个端口收到，是硬件在入队列时记下的，学习算法据此建立「MAC ↔ 端口」映射。';
+      return ls;
+    };
+    const META = [
+      { t: 0.000, kind: 'flood', phase: '未知单播泛洪', title: 'A → B · 首帧',
+        info: 'A → B · 表空 → 学习 A@P1，泛洪 P2/P3/P4', proto: 'ETH',
+        note: '交换机刚上电，转发表为空。收到帧先学习源地址 A 在端口 P1，再查目的 B 未命中，于是向除 P1 外的所有端口泛洪；B 会收到，C/D 也会收到但由网卡丢弃。' },
+      { t: 0.004, kind: 'forward', phase: '已知单播转发', title: 'B → A · 精准转发',
+        info: 'B → A · A@P1 命中 → 只从 P1 转发', proto: 'ETH',
+        note: 'B 的应答帧从 P2 进入：先学习 B@P2，再查到 A 在 P1，于是只向 P1 转发。这一刻起交换机从「集线器」变成了「按目的地址定向转发」的网桥。' },
+      { t: 0.011, kind: 'flood', phase: '未知单播泛洪', title: 'A → C · 再次泛洪',
+        info: 'A → C · C 未学习 → 泛洪 P2/P3/P4', proto: 'ETH',
+        note: '自学习是「被动」的：只有主机主动发过帧，交换机才知道它在哪个端口。C 一直沉默，因此去往 C 的帧仍要泛洪。' },
+      { t: 0.018, kind: 'forward', phase: '已知单播转发', title: 'C → A · 学习 C 并转发',
+        info: 'C → A · 学习 C@P3，A@P1 命中 → 单播 P1', proto: 'ETH',
+        note: 'C 一开口，交换机立刻学到 C@P3。此后 A ↔ C 的通信不再泛洪，冲突域被隔离，端口带宽得以独享。' },
+      { t: 0.027, kind: 'filter', phase: '同端口过滤', title: 'A → B · 同网段过滤',
+        info: 'A / B 同在 P1 共享网段 → 过滤，不转发', proto: 'ETH',
+        note: '如果 A 与 B 接在同一个集线器上（都从 P1 进入），目的端口与入端口相同，交换机不会把帧再送回原端口 —— 这就是过滤，也是网桥隔离冲突域的关键。' },
+      { t: 0.036, kind: 'bcast', phase: '广播帧泛洪', title: 'ARP Request · 广播',
+        info: 'A → FF:FF:FF:FF:FF:FF · 广播必须泛洪', proto: 'ARP',
+        note: '广播 / 组播地址永远不会出现在转发表里（它们不可能作为源地址被学习），因此广播帧总是向除入端口外的所有端口复制一份。' },
+      { t: 0.041, kind: 'forward', phase: '已知单播转发', title: 'ARP Reply · 单播应答',
+        info: 'B → A · A@P1 命中 → 只从 P1 转发', proto: 'ARP',
+        note: 'ARP 应答是单播：目的 MAC 是 A，转发表命中 P1，其它端口完全看不到这个应答，也不会打扰 C / D。' },
+      { t: 0.092, kind: 'learn', phase: '主机迁移 / 表项更新', title: 'A 迁移到 P3 · 表项覆盖',
+        info: '源 A 出现在 P3 → 覆盖 A@P1 为 A@P3', proto: 'ETH',
+        note: '把 A 的网线从 P1 拔到 P3 后，同一个源 MAC 出现在新端口。交换机无条件用「最新的入端口」覆盖旧表项，避免把帧继续发错端口。这正是自学习能自适应拓扑变化的原因。' },
+      { t: 0.099, kind: 'forward', phase: '已知单播转发', title: 'B → A · 改走新端口',
+        info: 'B → A · A@P3 命中 → 改从 P3 转发', proto: 'ETH',
+        note: '表项更新立即生效：后续发往 A 的帧改从 P3 出去。注意交换机不会主动广播「A 搬家了」，靠的就是这条「源地址学习 + 覆盖」规则。' }
+    ];
+
+    const packets = SW_SCRIPTS.learn.map((f, i) => {
+      const m = META[i], inPort = f.in || SW_PORT[f.src];
+      return P({
+        t: m.t, src: SW_MAC[f.src], dst: f.dst === 'FF' ? 'Broadcast' : SW_MAC[f.dst],
+        proto: m.proto, kind: m.kind, phase: m.phase, title: m.title, info: m.info, note: m.note,
+        osi: [2], layer: 2, f: f, from: SW_PORT_NODE[inPort], to: 'sw',
+        layers: swLayers(f)
+      });
+    });
+
+    def('switch', {
+      name: '交换机自学习', title: '网桥转发表实验', cat: 'base', sub: 'MAC 学习 · 泛洪 · 转发 · 过滤',
+      osi: 2, layer: 2,
+      nodes: ['ha', 'hb', 'hc', 'hd', 'sw'], seqNodes: ['ha', 'sw', 'hb', 'hc', 'hd'],
+      links: [['ha', 'sw'], ['hb', 'sw'], ['hc', 'sw'], ['hd', 'sw']],
+      labels: {
+        ha: { name: '主机 A · P1', en: 'Host A · P1', ip: MAC_A },
+        hb: { name: '主机 B · P2', en: 'Host B · P2', ip: MAC_B },
+        hc: { name: '主机 C · P3', en: 'Host C · P3', ip: MAC_C },
+        hd: { name: '主机 D · P4', en: 'Host D · P4', ip: MAC_D },
+        sw: { name: '交换机 / 网桥 SW1', en: 'Switch / Bridge SW1', ip: 'MAC 转发表 · 4 端口' }
+      },
+      steps: [
+        { t: '源地址学习', d: '从入端口记下「源 MAC ↔ 端口」', at: 1 },
+        { t: '未知单播泛洪', d: '目的未命中就复制到其它端口', at: 1 },
+        { t: '已知单播转发', d: '命中表项后只发一个端口', at: 2 },
+        { t: '同端口过滤', d: '目的与入端口相同则丢弃', at: 5 },
+        { t: '广播与老化', d: '广播必泛洪，表项会过期', at: 6 },
+        { t: '主机迁移', d: '源地址换端口时覆盖旧表项', at: 8 }
+      ],
+      desc: '交换机不读取 IP，也不修改帧：它只看以太网帧的源 MAC 和目的 MAC。收到任何一帧，先把「源 MAC ↔ 入端口」写入转发表（学习、覆盖、刷新老化）；再查目的 MAC，命中就单播转发，未命中就泛洪，目的与入端口相同则过滤。表项默认 300 秒老化，主机换端口时由新的源地址帧自动覆盖。',
+      tip: '自学习算法本身不会防环：一旦二层存在冗余链路，广播帧与未知单播帧会沿环路无限复制，形成广播风暴，MAC 表也会在两个端口间反复漂移。这就是必须再叠加生成树协议（STP）把冗余链路逻辑阻塞的原因 —— 请接着看下一门课程。',
+      stats: [
+        { k: '工作层次', v: '数据链路层 (L2)' },
+        { k: '学习依据', v: '源 MAC + 入端口' },
+        { k: '转发依据', v: '目的 MAC 查表' },
+        { k: '三种动作', v: '泛洪 / 转发 / 过滤' },
+        { k: '默认老化', v: '300 s' },
+        { k: '表项容量', v: '本实验 4 端口' }
+      ],
+      packets: packets,
+      lab: { tab: 'swLabView' }
+    });
+  })();
+
+  /* ============================================================
+     20 · 生成树协议 STP / RSTP
+     共享仿真内核：由根桥、链路开销与 Bridge ID 计算端口角色，
+     再按「故障 → Max Age 超时 → TCN → TC → 重新收敛」推演拓扑变化。
+     ============================================================ */
+  const STP_SW = {
+    s1: { id: 's1', name: 'SW1', mac: MAC_SW1, ports: { 1: '主机 A', 2: 'SW1—SW2', 3: 'SW1—SW3' } },
+    s2: { id: 's2', name: 'SW2', mac: MAC_SW2, ports: { 1: 'SW2—SW1', 2: 'SW2—SW3' } },
+    s3: { id: 's3', name: 'SW3', mac: MAC_SW3, ports: { 1: 'SW3—SW1', 2: 'SW3—SW2', 3: '主机 B' } }
+  };
+  const STP_LINKS = [
+    { id: 'l12', a: 's1', b: 's2', pa: 2, pb: 1, cost: 19, label: 'SW1 — SW2' },
+    { id: 'l23', a: 's2', b: 's3', pa: 2, pb: 2, cost: 19, label: 'SW2 — SW3' },
+    { id: 'l31', a: 's3', b: 's1', pa: 1, pb: 3, cost: 19, label: 'SW3 — SW1' }
+  ];
+  const STP_LAB_DEFAULT = { root: 's1', fail: 'l12', proto: 'stp' };
+
+  // 依据 (根路径开销, 上游 Bridge ID, 端口 ID) 选出每个非根桥的根端口，
+  // 再为每条链路选出指定端口，剩下的端口置为 Alternate / Blocking。
+  function stpRoles(root, fail) {
+    const pri = {};
+    Object.keys(STP_SW).forEach(k => { pri[k] = k === root ? 4096 : 32768; });
+    const links = STP_LINKS.filter(l => l.id !== fail);
+    const dist = { s1: Infinity, s2: Infinity, s3: Infinity };
+    dist[root] = 0;
+    for (let k = 0; k < 3; k++) links.forEach(l => {
+      if (dist[l.a] + l.cost < dist[l.b]) dist[l.b] = dist[l.a] + l.cost;
+      if (dist[l.b] + l.cost < dist[l.a]) dist[l.a] = dist[l.b] + l.cost;
+    });
+
+    const parent = {};
+    Object.keys(STP_SW).forEach(s => {
+      if (s === root) { parent[s] = null; return; }
+      const cand = links.filter(l => l.a === s || l.b === s).map(l => {
+        const nb = l.a === s ? l.b : l.a;
+        return { id: l.id, key: [dist[nb] + l.cost, pri[nb], STP_SW[nb].mac] };
+      }).sort((x, y) => x.key[0] - y.key[0] || x.key[1] - y.key[1] || x.key[2].localeCompare(y.key[2]))[0];
+      parent[s] = cand ? cand.id : null;
+    });
+
+    const roles = { 's1:1': 'DP', 's3:3': 'DP' };   // 接主机的边缘端口恒为指定端口
+    links.forEach(l => {
+      const A = { s: l.a, d: dist[l.a], p: pri[l.a], m: STP_SW[l.a].mac, port: l.pa };
+      const B = { s: l.b, d: dist[l.b], p: pri[l.b], m: STP_SW[l.b].mac, port: l.pb };
+      const cmp = (B.d - A.d) || (B.p - A.p) || B.m.localeCompare(A.m);
+      const w = cmp >= 0 ? A : B, lo = cmp >= 0 ? B : A;
+      roles[w.s + ':' + w.port] = 'DP';
+      roles[lo.s + ':' + lo.port] = parent[lo.s] === l.id ? 'RP' : 'ALT';
+    });
+    if (fail && fail !== 'none') {
+      const fl = STP_LINKS.filter(l => l.id === fail)[0];
+      if (fl) { roles[fl.a + ':' + fl.pa] = 'DOWN'; roles[fl.b + ':' + fl.pb] = 'DOWN'; }
+    }
+    const blocked = Object.keys(roles).filter(k => roles[k] === 'ALT');
+    return { root: root, pri: pri, dist: dist, parent: parent, roles: roles, blocked: blocked, fail: fail };
+  }
+
+  function simulateSTP(cfg) {
+    const o = Object.assign({}, STP_LAB_DEFAULT, cfg || {});
+    const before = stpRoles(o.root, 'none');
+    const after = stpRoles(o.root, o.fail === 'none' ? 'none' : o.fail);
+    const rootName = STP_SW[o.root].name;
+    const failLink = STP_LINKS.filter(l => l.id === o.fail)[0];
+    const failText = failLink ? failLink.label : '无故障';
+    const convZh = o.proto === 'rstp' ? 'RSTP 用提案/同意（Proposal / Agreement）握手，毫秒级完成' :
+      'STP 需 Max Age 20 s + Listening 15 s + Learning 15 s，约 30~50 s';
+    const convEn = o.proto === 'rstp' ? 'RSTP completes in milliseconds via Proposal/Agreement handshakes' :
+      'classic STP needs Max Age 20 s + Listening 15 s + Learning 15 s, about 30–50 s';
+    const convTime = o.proto === 'rstp' ? '< 1 s' : '30 ~ 50 s';
+    const blkBefore = before.blocked.length ? before.blocked.map(k => STP_SW[k.split(':')[0]].name + ':P' + k.split(':')[1]).join('、') : '无';
+    const blkAfter = after.blocked.length ? after.blocked.map(k => STP_SW[k.split(':')[0]].name + ':P' + k.split(':')[1]).join('、') : '无';
+    const portListEn = rs => rs.blocked.length ? rs.blocked.map(k => STP_SW[k.split(':')[0]].name + ':P' + k.split(':')[1]).join(', ') : 'none';
+    const blkBeforeEn = portListEn(before), blkAfterEn = portListEn(after);
+
+    const S11 = [
+      { phase: 'boot', p: 0, focus: 's1', arrows: true,
+        zh: '阶段 1 · 启动：三台交换机刚上电，都自认为是根桥，从每个活动端口每 2 秒发出配置 BPDU，其中的「根桥 ID」填自己的 Bridge ID（优先级 + MAC），根路径开销为 0。',
+        en: 'Stage 1 · Boot: all three switches assume they are the root and emit Configuration BPDUs every 2 s on every active port, each claiming its own Bridge ID (priority + MAC) with a root path cost of 0.' },
+      { phase: 'elect', p: 1, focus: 's1',
+        zh: '阶段 2 · 根桥选举：逐字段比较 BPDU 里的根桥 ID，先比优先级（默认 32768，需为 4096 倍数），再比 MAC，数值最小者胜出。本实验把 ' + rootName + ' 的优先级设为 4096，因此它成为根桥，其余交换机停止自称根桥，只转发它的 BPDU。',
+        en: 'Stage 2 · Root election: BPDUs are compared by root Bridge ID — first priority (default 32768, in steps of 4096), then MAC; the smallest wins. Here ' + rootName + ' has priority 4096, so it becomes the root bridge and the others stop claiming root and only relay its BPDUs.' },
+      { phase: 'rootport', p: 2, focus: 's2', arrows: true,
+        zh: '阶段 3 · 选根端口：每台非根桥比较所有能到达根桥的端口，取「累计根路径开销」最小者作为根端口 RP；开销相同则依次比较上游 Bridge ID、上游端口 ID。100 Mbps 链路开销为 19，直连根桥的端口开销 19 优于绕行 38。',
+        en: 'Stage 3 · Root ports: every non-root bridge picks the port with the smallest cumulative root path cost as its RP; ties are broken by upstream Bridge ID then upstream Port ID. A direct 100 Mbps link costs 19, beating a two-hop detour of 38.' },
+      { phase: 'designated', p: 3, focus: 's3', arrows: true,
+        zh: '阶段 4 · 选指定端口：每条链路（每个网段）必须且只能有一个指定端口 DP，由该链路上到根桥开销最小的交换机担任；根桥的所有活动端口天然都是 DP。DP 负责在该网段上发送 BPDU 与转发用户帧。',
+        en: 'Stage 4 · Designated ports: each segment elects exactly one DP — the endpoint with the lowest root path cost (ties broken by Bridge ID). All active ports on the root bridge are DPs. A DP sends BPDUs onto its segment and forwards user frames.' },
+      { phase: 'block', p: 4, focus: 'l23',
+        zh: '阶段 5 · 阻塞冗余端口：既不是 RP 也不是 DP 的端口进入 Blocking（Alternate），只收 BPDU、不转发用户帧、也不学习 MAC。三角形环路被剪成一棵无环的树，当前阻塞端口：' + blkBefore + '。',
+        en: 'Stage 5 · Blocking: ports that are neither RP nor DP enter Blocking (Alternate) — they listen to BPDUs but do not forward frames or learn MACs. The triangle is pruned into a loop-free tree. Blocked port: ' + blkBeforeEn + '.' },
+      { phase: 'stable', p: 5, focus: 's1', arrows: true,
+        zh: '阶段 6 · 稳定转发：根桥每 Hello Time (2 s) 发一次配置 BPDU，下游从根端口收到后刷新 Message Age 并从指定端口继续转发。用户帧 A → B 只沿 RP / DP 这条唯一路径通过，被阻塞的链路保持静默。',
+        en: 'Stage 6 · Steady state: the root emits a Configuration BPDU every Hello Time (2 s); downstream bridges receive it on root ports, refresh Message Age and relay it out designated ports. User frames A → B follow the single RP/DP path; the blocked link stays silent.' },
+      { phase: 'fail', p: 6, focus: o.fail === 'none' ? 's1' : o.fail,
+        zh: '阶段 7 · 链路故障：' + failText + (failLink ? ' 断开，下游交换机收不到根桥的 BPDU' : '（本轮未设置故障，活动树保持不变，可对比有故障时的收敛过程）') +
+          '。STP 要等 Message Age 累加到 Max Age (20 s) 才判定失效；RSTP 只需连续 3 个 Hello (6 s) 未收到即可，而且备用端口早已准备好。',
+        en: 'Stage 7 · Link failure: ' + failText + (failLink ? ' goes down, so downstream bridges stop receiving root BPDUs' : ' — no failure configured this run, so the active tree stays unchanged') +
+          '. Classic STP waits until Message Age reaches Max Age (20 s); RSTP detects it after 3 missed Hellos (6 s) and already has an alternate port ready.' },
+      { phase: 'detect', p: 7, focus: 's2',
+        zh: '阶段 8 · 感知变化并上报：检测到端口状态变化的交换机从根端口向上游发送 TCN BPDU（只有 4 字节），上游用 TCA 确认并继续向根桥转发，直到根桥收到为止。注意 TCN 不含任何拓扑细节，只是「我这里有变化」。',
+        en: 'Stage 8 · Detection and notification: the switch that detects the change sends a 4-byte TCN BPDU upstream via its root port; each upstream bridge acknowledges with TCA and relays it until the root hears it. A TCN carries no topology details — just "something changed here".' },
+      { phase: 'tcn', p: 8, focus: 's1',
+        zh: '阶段 9 · 根桥通告全网：根桥在后续配置 BPDU 中把 TC (Topology Change) 标志置 1 并持续转发 Forward Delay + Max Age 时间。所有交换机把 MAC 转发表的老化时间从默认 300 s 临时缩短为 15 s，快速冲掉可能已经失效的表项。',
+        en: 'Stage 9 · Root floods the change: the root sets the TC flag in its Configuration BPDUs for Forward Delay + Max Age. Every bridge temporarily shortens MAC table aging from 300 s to 15 s, flushing entries that may now point out the wrong port.' },
+      { phase: 'converge', p: 9, focus: o.fail === 'none' ? 's1' : 'l23',
+        zh: '阶段 10 · 重新收敛：' + convZh + '。原阻塞端口若在新拓扑中成为 RP / DP，就由 Blocking → Listening → Learning → Forwarding 逐步放开，同时不学习 MAC 以防临时环路。新阻塞端口：' + blkAfter + '。',
+        en: 'Stage 10 · Reconvergence: ' + convEn + '. A formerly blocked port that is now an RP/DP moves Blocking → Listening → Learning → Forwarding without learning MACs, preventing transient loops. New blocked port: ' + blkAfterEn + '.' },
+      { phase: 'final', p: 10, focus: 's3',
+        zh: '阶段 11 · 新树稳定：冗余链路被激活，A → B 的帧改走新的活动路径，网络恢复连通但不再有环。STP 用「逻辑阻塞」而非物理断开来保留冗余：平时只有一棵树在工作，故障时自动把备份链路纳进来。',
+        en: 'Stage 11 · New tree stable: the redundant link is activated and A → B frames take the new active path — connectivity restored without any loop. STP blocks links logically, not physically: one tree forwards at a time, and the backup is absorbed automatically on failure.' }
+    ];
+
+    return S11.map((x, i) => Object.assign({}, x, {
+      r: i + 1, root: o.root, proto: o.proto, convTime: convTime,
+      fail: o.fail === 'none' ? null : o.fail,
+      roles: i === 0 ? null : (i <= 8 ? before : after),
+      showFail: i >= 6 && o.fail !== 'none',
+      blockedCount: (i >= 9 ? after.blocked.length : before.blocked.length),
+      blockedPorts: (i >= 9 ? blkAfter : blkBefore),
+      rootCost: Math.max.apply(null, Object.keys((i >= 9 ? after : before).dist).map(k => (i >= 9 ? after : before).dist[k]).filter(v => isFinite(v))) || 0
+    }));
+  }
+
+  (function () {
+    const pri = { s1: 4096, s2: 32768, s3: 32768 };
+    const B = (rm, cost, br, port, flags, msgAge) => STP_CONFIG({
+      rootPri: pri[rm], rootMac: STP_SW[rm].mac, cost: cost,
+      brPri: pri[br], brMac: STP_SW[br].mac,
+      port: 0x1000 | port, flags: flags || 0, msgAge: msgAge || 0
+    });
+    const ic = ICMP(8, 0, 'Echo Request', 0x0c31, 1);
+    const userFrame = [ETH(MAC_B, MAC_A, 0x0800, '0x0800 (IPv4)'),
+      IPV4(IP_A, IP_B, 1, '1 (ICMP)', ic.bytes.length), ic];
+    userFrame[0].note = '这是普通用户帧（EtherType 0x0800），与 BPDU 不同：它只在 RP / DP 端口上转发，永远不会从 Blocking 端口出去。';
+
+    const M = [
+      { t: 0.000, from: 's1', to: 's2', proto: 'STP', kind: 'bpdu', phase: '启动 · 各自称根',
+        title: '配置 BPDU · SW1 自称根桥',
+        info: 'Root ID 4096:SW1 · Cost 0 · SW1 从 P2 发出',
+        note: '交换机刚启动时所有端口都在发送 BPDU，且都把自己填成根桥（Root ID = 自己的 Bridge ID，Cost = 0）。SW2 / SW3 也在做同样的事。',
+        layers: stpFrame(MAC_SW1, B('s1', 0, 's1', 2)) },
+      { t: 2.000, from: 's1', to: 's2', proto: 'STP', kind: 'bpdu', phase: '根桥选举',
+        title: '配置 BPDU · SW1 胜出成为根桥',
+        info: 'Root ID 4096:SW1 · Cost 0 · 向 SW2 通告',
+        note: '比较根桥 ID：优先级 4096 < 32768，SW1 的 BPDU 最优。SW2 收到后承认 SW1 是根桥，不再发送自己那套 BPDU，改成从指定端口转发 SW1 的信息。',
+        layers: stpFrame(MAC_SW1, B('s1', 0, 's1', 2)) },
+      { t: 2.006, from: 's2', to: 's3', proto: 'STP', kind: 'bpdu', phase: '根端口 / 指定端口',
+        title: '配置 BPDU · SW2 转发 (Cost 19)',
+        info: 'Root ID 4096:SW1 · Cost 19 · Bridge 32768:SW2 · P2',
+        note: 'SW2 把根桥 BPDU 的根路径开销加上本链路开销 19 后从 P2 转发出去。P1（直连根桥、开销 19）被选为根端口；P2 在 SW2—SW3 网段上开销最小，成为该网段指定端口。',
+        layers: stpFrame(MAC_SW2, B('s1', 19, 's2', 2)) },
+      { t: 2.011, from: 's1', to: 's3', proto: 'STP', kind: 'bpdu', phase: '根端口 / 指定端口',
+        title: '配置 BPDU · SW1 → SW3 (Cost 0)',
+        info: 'Root ID 4096:SW1 · Cost 0 · 从 P3 发出',
+        note: '根桥的所有活动端口都是指定端口。SW3 从 P1 收到 Cost=0 的 BPDU，加上链路开销 19，判定 P1 是到根桥最优的根端口。',
+        layers: stpFrame(MAC_SW1, B('s1', 0, 's1', 3)) },
+      { t: 2.017, from: 's2', to: 's3', proto: 'STP', kind: 'bpdu', phase: '阻塞冗余端口',
+        title: '配置 BPDU · SW3 的 P2 被阻塞',
+        info: 'Root ID 4096:SW1 · Cost 19 · SW3:P2 → Blocking',
+        note: 'SW2—SW3 这条链路上，SW2 与 SW3 到根桥的开销都是 19，平局比较 Bridge ID：SW2 更小，所以 SW2:P2 是指定端口，SW3:P2 既非根端口也非指定端口，被置为 Blocking。环路就此被剪断。',
+        layers: stpFrame(MAC_SW2, B('s1', 19, 's2', 2)) },
+      { t: 4.000, from: 's1', to: 's3', proto: 'STP', kind: 'bpdu', phase: '稳定转发',
+        title: 'Hello BPDU · 根桥周期通告',
+        info: 'Root ID 4096:SW1 · Message Age 0 · 每 2 s',
+        note: '稳定后只有根桥产生配置 BPDU，其它交换机在根端口收到、刷新 Message Age 后从指定端口继续转发。只要 Hello 不断，端口角色就保持不变。',
+        layers: stpFrame(MAC_SW1, B('s1', 0, 's1', 3)) },
+      { t: 24.000, from: 's2', to: 's3', proto: 'STP', kind: 'topo', phase: '链路故障',
+        title: 'BPDU 老化 · Message Age = Max Age 20 s',
+        info: 'SW1—SW2 中断 · 20 s 未收到根 BPDU',
+        note: 'SW1—SW2 链路断开后，SW2 再也收不到根桥的 BPDU，缓存的 BPDU 中 Message Age 累加到 20 s（Max Age）后被丢弃。STP 由此判定拓扑发生变化；RSTP 只需 3 个 Hello (6 s)。',
+        layers: stpFrame(MAC_SW2, B('s1', 19, 's2', 1, 0, 20)) },
+      { t: 24.004, from: 's2', to: 's3', proto: 'STP', kind: 'tcn', phase: '拓扑变化通知',
+        title: 'TCN BPDU · 向上游报告变化',
+        info: 'TCN · 4 字节 · 从根端口向上游逐跳转发',
+        note: 'SW2 通过新的根端口向上游发 TCN BPDU。它只有 4 字节，不带任何拓扑信息；上游用配置 BPDU 中的 TCA 位确认，并继续转发直到根桥。',
+        layers: stpFrame(MAC_SW2, STP_TCN()) },
+      { t: 24.012, from: 's1', to: 's3', proto: 'STP', kind: 'tc', phase: '根桥通告 TC',
+        title: '配置 BPDU · TC 标志置位',
+        info: 'Flags 0x01 (TC) · 全网缩短 MAC 表老化',
+        note: '根桥收到 TCN 后，在后续配置 BPDU 里把最低位 TC 置 1 并泛洪全网。各交换机把 MAC 转发表老化时间临时从 300 s 改为 Forward Delay (15 s)，尽快清掉可能走错端口的表项。',
+        layers: stpFrame(MAC_SW1, B('s1', 0, 's1', 3, 1, 0)) },
+      { t: 54.020, from: 's3', to: 's2', proto: 'STP', kind: 'bpdu', phase: '重新收敛',
+        title: '配置 BPDU · SW3:P2 成为指定端口',
+        info: 'Root ID 4096:SW1 · Cost 19 · SW3:P2 解除阻塞',
+        note: '新拓扑里 SW2 只能经 SW3 到达根桥（开销 38）。SW3:P2 由 Blocking 经 Listening / Learning 依次进入 Forwarding 并成为该网段指定端口，SW2:P2 则变成新的根端口；STP 这段收敛约需 30 s。',
+        layers: stpFrame(MAC_SW3, B('s1', 19, 's3', 2)) },
+      { t: 54.031, from: 'ha', to: 's1', proto: 'ETH', kind: 'swdata', phase: '新树稳定',
+        title: '用户帧 · A → B 改走备用路径',
+        info: 'A → B · 沿新的 RP / DP 树转发',
+        note: '收敛完成后，A 与 B 之间的帧改走 SW1 → SW3 → SW2 这条新路径。冗余链路仍在，但同一时刻只有一棵无环树在转发用户数据。',
+        layers: userFrame }
+    ];
+
+    def('stp', {
+      name: '生成树协议', title: 'STP / RSTP 实验', cat: 'base', sub: '根桥选举 · 端口角色 · 收敛',
+      osi: 2, layer: 2,
+      nodes: ['ha', 's1', 's2', 's3', 'hd'], seqNodes: ['ha', 's1', 's2', 's3', 'hd'],
+      links: [['ha', 's1'], ['s1', 's2'], ['s2', 's3'], ['s3', 's1'], ['s3', 'hd']],
+      pos: {
+        ha: { x: 120, y: 300 }, s1: { x: 270, y: 130 }, s2: { x: 730, y: 130 },
+        s3: { x: 500, y: 330 }, hd: { x: 880, y: 330 }
+      },
+      labels: {
+        ha: { name: '主机 A', en: 'Host A', ip: MAC_A },
+        hd: { name: '主机 B', en: 'Host B', ip: MAC_B },
+        s1: { name: '交换机 SW1', en: 'Switch SW1', ip: MAC_SW1 },
+        s2: { name: '交换机 SW2', en: 'Switch SW2', ip: MAC_SW2 },
+        s3: { name: '交换机 SW3', en: 'Switch SW3', ip: MAC_SW3 }
+      },
+      steps: [
+        { t: '各自称根', d: '所有交换机发出自己的配置 BPDU', at: 1 },
+        { t: '根桥选举', d: 'Bridge ID 最小者成为根桥', at: 2 },
+        { t: '选根端口', d: '非根桥挑到根开销最小的端口', at: 3 },
+        { t: '选指定端口', d: '每条链路只保留一个 DP', at: 4 },
+        { t: '阻塞冗余端口', d: '剪断环路形成无环树', at: 5 },
+        { t: '故障与收敛', d: 'TCN / TC 通告后启用备用链路', at: 9 },
+        { t: '新树稳定', d: '用户帧沿新路径转发', at: 11 }
+      ],
+      desc: '二层冗余链路能提升可靠性，却会让广播帧沿环路无限复制。STP（IEEE 802.1D）用配置 BPDU 交换 Bridge ID 与根路径开销，选出唯一根桥，再为每台交换机定根端口、为每条链路定指定端口，把剩下的端口逻辑阻塞，从而把任意拓扑剪成一棵无环树；链路故障时通过 TCN / TC 机制重新收敛，RSTP（802.1w）把这一过程从 30~50 秒缩短到毫秒级。',
+      tip: 'BPDU 直接封装在 802.3 + LLC（DSAP/SSAP = 0x42）帧里，目的 MAC 为组播 01:80:C2:00:00:00，不经过 IP 层。Bridge ID = 2 字节优先级 + 6 字节 MAC，先比优先级再比 MAC，越小越优；端口角色裁决顺序是「根路径开销 → 发送桥 ID → 端口 ID」。被阻塞的端口依然监听 BPDU，这正是故障后能快速接管的原因。',
+      stats: [
+        { k: '协议标准', v: 'IEEE 802.1D / 802.1w' },
+        { k: 'BPDU 组播', v: '01:80:C2:00:00:00' },
+        { k: 'LLC 地址', v: 'DSAP/SSAP = 0x42' },
+        { k: 'Bridge ID', v: '优先级 + MAC' },
+        { k: '链路开销', v: '100 Mbps = 19' },
+        { k: 'STP 定时器', v: 'Hello 2 / MaxAge 20 / Fwd 15 s' },
+        { k: '收敛时间', v: 'STP 30~50 s · RSTP < 1 s' }
+      ],
+      packets: M.map((m, i) => P({
+        t: m.t, src: m.from === 'ha' ? MAC_A : STP_SW[m.from].mac,
+        dst: m.from === 'ha' ? MAC_B : MAC_STP_MCAST,
+        proto: m.proto, kind: m.kind, phase: m.phase,
+        from: m.from, to: m.to, title: m.title, info: m.info, note: m.note,
+        osi: [2], layer: 2, f: { step: i },
+        layers: m.layers
+      })),
+      lab: { tab: 'stpLabView' }
+    });
+  })();
+
   /* ---------- 元信息 ---------- */
-  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf', 'bgp', 'tcpcc'];
+  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf', 'bgp', 'tcpcc', 'switch', 'stp'];
   const CATEGORIES = [
     { id: 'all', zh: '全部', en: 'All' },
     { id: 'base', zh: '基础', en: 'Core' },
@@ -1621,14 +2176,20 @@
     dns: '#2f6fd0', tcp: '#0f9c9c', request: '#e8a317', response: '#7c4dd6',
     ack: '#a5b0c7', tls: '#d24b6a', routing: '#2f8fd0', update: '#8a5cd6',
     open: '#e08a2e', keepalive: '#3aa87a', notify: '#d0483f',
-    ccdata: '#2f6fd0', dupack: '#e8a317', retrans: '#d0483f'
+    ccdata: '#2f6fd0', dupack: '#e8a317', retrans: '#d0483f',
+    flood: '#e8a317', forward: '#2f6fd0', filter: '#9aa6c0', bcast: '#7c4dd6', learn: '#0f9c9c',
+    bpdu: '#1f8a9c', tcn: '#d0483f', tc: '#e08a2e', topo: '#8a93ad', swdata: '#2f9c6a'
   };
   const KIND_ZH = { dns: 'DNS', tcp: 'TCP', request: '请求', response: '响应', ack: '纯 ACK', tls: 'TLS',
     routing: '路由报文', update: '路由更新', open: 'OPEN 协商', keepalive: '保活', notify: '会话通知',
-    ccdata: '数据段', dupack: '重复 ACK', retrans: '快重传' };
+    ccdata: '数据段', dupack: '重复 ACK', retrans: '快重传',
+    flood: '未知单播泛洪', forward: '已知单播转发', filter: '同端口过滤', bcast: '广播帧', learn: '表项更新',
+    bpdu: '配置 BPDU', tcn: 'TCN BPDU', tc: 'TC 置位', topo: '拓扑事件', swdata: '用户数据帧' };
   const KIND_EN = { dns: 'DNS', tcp: 'TCP', request: 'Request', response: 'Response', ack: 'Bare ACK', tls: 'TLS',
     routing: 'Routing', update: 'Route update', open: 'BGP OPEN', keepalive: 'Keepalive', notify: 'Notification',
-    ccdata: 'Data segment', dupack: 'Dup ACK', retrans: 'Retransmit' };
+    ccdata: 'Data segment', dupack: 'Dup ACK', retrans: 'Retransmit',
+    flood: 'Unknown-unicast flood', forward: 'Known unicast', filter: 'Filtered', bcast: 'Broadcast', learn: 'MAC move',
+    bpdu: 'Config BPDU', tcn: 'TCN BPDU', tc: 'TC flag', topo: 'Topology event', swdata: 'User frame' };
   const OSI_NAMES = ['物理层', '数据链路层', '网络层', '传输层', '会话层', '表示层', '应用层'];
 
   global.ProtocolData = {
@@ -1636,6 +2197,10 @@
     kindColors: KIND_COLORS, kindZh: KIND_ZH, kindEn: KIND_EN,
     osiNames: OSI_NAMES, colors: C, util: U,
     labSimulate: simulateCC, labDefault: LAB_DEFAULT,
+    swSimulate: simulateSwitch, swDefault: SW_LAB_DEFAULT, swScripts: SW_SCRIPTS,
+    swHosts: SW_HOSTS, swMac: SW_MAC, swPort: SW_PORT,
+    stpSimulate: simulateSTP, stpDefault: STP_LAB_DEFAULT,
+    stpSwitches: STP_SW, stpLinks: STP_LINKS,
     ipClient: IP_CLIENT, ipDns: IP_DNS, ipWeb: IP_WEB
   };
 })(window);

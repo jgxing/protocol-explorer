@@ -63,7 +63,33 @@
       labChartTitle: '拥塞窗口 cwnd（单位：MSS = 1460 字节）', labAxisRTT: 'RTT 轮次',
       labCwndLegend: 'cwnd', labSsthLegend: 'ssthresh',
       labEventDup: '3 dup ACK', labEventTimeout: 'RTO 超时', labInfl: '快恢复膨胀',
-      labReady: '尚未开始', labDone: '本轮实验结束，可重置后换参数再跑'
+      labReady: '尚未开始', labDone: '本轮实验结束，可重置后换参数再跑',
+      swLabView: '自学习实验', stpLabView: '生成树实验',
+      xlTitleSw: '交换机自学习实验台', xlTitleStp: '生成树协议实验台',
+      xlNoteSw: '下方抓包表记录默认帧序列（标准自学习）；这里改参数或发送自定义帧会重算转发表，抓包表只做对应定位。',
+      xlNoteStp: '下方抓包表记录默认参数（根桥 SW1 / 故障 SW1—SW2 / STP）下的一次过程；这里改参数会重算端口角色。',
+      xlChartSw: '帧转发路径 · 蓝=入端口 · 绿/橙=出端口 · 红=过滤',
+      xlChartStp: '二层拓扑与端口角色 · 实线=转发 · 红虚线=阻塞 · 灰虚线=故障',
+      xlCfgScript: '演示序列', xlScriptLearn: '标准自学习 (9 帧)', xlScriptAging: '表项老化', xlScriptMove: '主机迁移',
+      xlCfgAging: '表项老化', xlAgingOff: '300 s（默认）', xlAgingShort: '2 帧即过期',
+      xlCfgSrc: '源主机', xlCfgDst: '目的主机', xlCfgIn: '入端口', xlInAuto: '按主机自动',
+      xlBroadcast: '广播 FF:FF…', xlSend: '发送自定义帧',
+      xlTable: 'MAC 转发表', xlThMac: 'MAC 地址', xlThPort: '端口', xlThAge: '静默帧数', xlTableEmpty: '（空表）',
+      xlAction: '转发决策', xlActFlood: '未知单播 · 泛洪', xlActForward: '已知单播 · 单播转发',
+      xlActFilter: '同端口 · 过滤', xlActBcast: '广播 · 泛洪',
+      xlLearnAdd: '新建表项', xlLearnMove: '表项覆盖（迁移）', xlLearnRefresh: '仅刷新老化',
+      xlTableNum: '表项数', xlFloodNum: '泛洪次数', xlFwdNum: '单播次数', xlFilterNum: '过滤次数',
+      xlIngress: '入端口', xlEgress: '出端口', xlStep: '当前帧', xlPhase: '当前阶段',
+      xlCfgRoot: '根桥（优先级 4096）', xlCfgFail: '故障链路', xlFailNone: '无故障（对照）',
+      xlCfgProto: '协议版本', xlProtoStp: 'STP · 802.1D', xlProtoRstp: 'RSTP · 802.1w',
+      xlRootMetric: '根桥', xlBlockMetric: '阻塞端口', xlCostMetric: '最大根开销', xlConvMetric: '收敛耗时',
+      xlRoles: '端口角色', xlRoleDP: '指定端口 DP', xlRoleRP: '根端口 RP', xlRoleALT: '阻塞 ALT', xlRoleDOWN: '链路中断',
+      xlLegendFwd: '转发链路', xlLegendBlk: '阻塞链路', xlLegendFail: '故障链路',
+      xlBpdu: 'BPDU 流向', xlTcnFlow: 'TCN 上报', xlRootBadge: 'ROOT',
+      xlPhBoot: '各自称根', xlPhElect: '根桥选举', xlPhRootPort: '选根端口', xlPhDesignated: '选指定端口',
+      xlPhBlock: '阻塞冗余端口', xlPhStable: '稳定转发', xlPhFail: '链路故障', xlPhDetect: '感知变化 · TCN',
+      xlPhTcn: '根桥通告 TC', xlPhConverge: '重新收敛', xlPhFinal: '新树稳定',
+      xlNoFrame: '尚未发送帧', xlStepDone: '本轮实验结束，可重置后换参数再跑', xlTimeline: '步骤时间轴（点击跳转）'
     },
     en: {
       tagline: 'Learn how the Internet works', learning: 'Studying', layer: 'App layer', progress: 'Progress',
@@ -101,7 +127,33 @@
       labChartTitle: 'Congestion window cwnd (unit: MSS = 1460 bytes)', labAxisRTT: 'RTT round',
       labCwndLegend: 'cwnd', labSsthLegend: 'ssthresh',
       labEventDup: '3 dup ACKs', labEventTimeout: 'RTO timeout', labInfl: 'Fast recovery inflation',
-      labReady: 'Not started', labDone: 'Run complete — reset and try another configuration'
+      labReady: 'Not started', labDone: 'Run complete — reset and try another configuration',
+      swLabView: 'MAC Learning Lab', stpLabView: 'STP Lab',
+      xlTitleSw: 'Switch MAC Learning Lab', xlTitleStp: 'Spanning Tree Protocol Lab',
+      xlNoteSw: 'The capture table below records the default frame sequence. Changing parameters or sending a custom frame here recomputes the forwarding table only.',
+      xlNoteStp: 'The capture table below shows one run with default settings (root SW1 / failure SW1—SW2 / STP). Changing parameters here recomputes port roles.',
+      xlChartSw: 'Frame path · blue = ingress · green/orange = egress · red = filtered',
+      xlChartStp: 'Layer-2 topology & port roles · solid = forwarding · red dashed = blocked · grey dashed = failed',
+      xlCfgScript: 'Frame sequence', xlScriptLearn: 'Standard learning (9 frames)', xlScriptAging: 'Table aging', xlScriptMove: 'Host move',
+      xlCfgAging: 'Aging', xlAgingOff: '300 s (default)', xlAgingShort: 'Expires in 2 frames',
+      xlCfgSrc: 'Source host', xlCfgDst: 'Destination', xlCfgIn: 'Ingress port', xlInAuto: 'Auto by host',
+      xlBroadcast: 'Broadcast', xlSend: 'Send custom frame',
+      xlTable: 'MAC forwarding table', xlThMac: 'MAC address', xlThPort: 'Port', xlThAge: 'Idle frames', xlTableEmpty: '(empty)',
+      xlAction: 'Forwarding decision', xlActFlood: 'Unknown unicast · flood', xlActForward: 'Known unicast · forward',
+      xlActFilter: 'Same port · filter', xlActBcast: 'Broadcast · flood',
+      xlLearnAdd: 'New entry', xlLearnMove: 'Entry overwritten (move)', xlLearnRefresh: 'Timer refreshed',
+      xlTableNum: 'Table entries', xlFloodNum: 'Flood count', xlFwdNum: 'Unicast count', xlFilterNum: 'Filtered count',
+      xlIngress: 'Ingress', xlEgress: 'Egress', xlStep: 'Current frame', xlPhase: 'Current stage',
+      xlCfgRoot: 'Root bridge (priority 4096)', xlCfgFail: 'Failed link', xlFailNone: 'No failure (control)',
+      xlCfgProto: 'Protocol', xlProtoStp: 'STP · 802.1D', xlProtoRstp: 'RSTP · 802.1w',
+      xlRootMetric: 'Root bridge', xlBlockMetric: 'Blocked ports', xlCostMetric: 'Max root cost', xlConvMetric: 'Convergence',
+      xlRoles: 'Port roles', xlRoleDP: 'Designated DP', xlRoleRP: 'Root port RP', xlRoleALT: 'Blocking ALT', xlRoleDOWN: 'Link down',
+      xlLegendFwd: 'Forwarding', xlLegendBlk: 'Blocked', xlLegendFail: 'Failed',
+      xlBpdu: 'BPDU flow', xlTcnFlow: 'TCN upstream', xlRootBadge: 'ROOT',
+      xlPhBoot: 'All claim root', xlPhElect: 'Root election', xlPhRootPort: 'Root ports', xlPhDesignated: 'Designated ports',
+      xlPhBlock: 'Blocking', xlPhStable: 'Steady state', xlPhFail: 'Link failure', xlPhDetect: 'Detection · TCN',
+      xlPhTcn: 'Root TC flood', xlPhConverge: 'Reconvergence', xlPhFinal: 'New tree stable',
+      xlNoFrame: 'No frame yet', xlStepDone: 'Run complete — reset and try another configuration', xlTimeline: 'Step timeline (click to jump)'
     }
   };
   const STAT_EN = {
@@ -125,7 +177,11 @@
     '协议版本': 'Version', '会话类型': 'Session type', '保活周期': 'Keepalive',
     '路径属性': 'Path attributes',
     '拥塞算法': 'Algorithms', '初始阈值': 'Initial ssthresh', '默认丢包': 'Default loss',
-    '发送窗口': 'Send window', 'MSS / RTT': 'MSS / RTT'
+    '发送窗口': 'Send window', 'MSS / RTT': 'MSS / RTT',
+    '工作层次': 'Layer', '学习依据': 'Learns from', '转发依据': 'Forwards by',
+    '三种动作': 'Three actions', '默认老化': 'Default aging', '表项容量': 'Table capacity',
+    '协议标准': 'Standard', 'BPDU 组播': 'BPDU multicast', 'LLC 地址': 'LLC SAP',
+    'Bridge ID': 'Bridge ID', '链路开销': 'Link cost', 'STP 定时器': 'STP timers', '收敛时间': 'Convergence'
   };
   const T = k => (I18N[state.lang] || I18N.zh)[k] || k;
   const trStat = k => state.lang === 'en' ? (STAT_EN[k] || k) : k;
@@ -136,7 +192,7 @@
     dhcp: 'IP 地址已分配', tls: '安全通道已建立', websocket: '实时通道已建立',
     smtp: '邮件已投递', ftp: '文件列表已送达', quic: 'HTTP/3 响应已送达',
     rip: '路由表已收敛', ospf: '链路状态已同步', bgp: '域间路由已收敛',
-    tcpcc: '拥塞窗口已收敛'
+    tcpcc: '拥塞窗口已收敛', switch: 'MAC 转发表已建立', stp: '无环生成树已建立'
   };
   const sc = () => D.scenarios[state.scenario];
   const pk = () => sc().packets[state.index] || null;
@@ -146,18 +202,25 @@
     url: { x: 218, y: 92 }, client: { x: 245, y: 352 }, gateway: { x: 522, y: 182 },
     dns: { x: 838, y: 96 }, dhcp: { x: 838, y: 96 }, web: { x: 838, y: 350 },
     target: { x: 838, y: 350 }, mail: { x: 838, y: 350 }, ftp: { x: 838, y: 350 },
-    r1: { x: 220, y: 300 }, r3: { x: 820, y: 300 }
+    r1: { x: 220, y: 300 }, r3: { x: 820, y: 300 },
+    sw: { x: 500, y: 250 },
+    ha: { x: 150, y: 96 }, hb: { x: 150, y: 410 }, hc: { x: 850, y: 96 }, hd: { x: 850, y: 410 },
+    s1: { x: 270, y: 130 }, s2: { x: 730, y: 130 }, s3: { x: 500, y: 382 }
   };
+  const XL_HOST_NODES = ['ha', 'hb', 'hc', 'hd'];
+  const XL_SW_NODES = ['sw', 's1', 's2', 's3'];
   const ROUTER_NODES = ['gateway', 'r1', 'r3'];
   const NODE_NAMES = {
     client: 'nodeClient', gateway: 'nodeGateway', dns: 'nodeDns', dhcp: 'nodeDhcp',
     web: 'nodeWeb', target: 'nodeTarget', mail: 'nodeMail', ftp: 'nodeFtp',
-    r1: 'nodeR1', r3: 'nodeR3'
+    r1: 'nodeR1', r3: 'nodeR3', sw: 'nodeWeb', ha: 'nodeWeb', hb: 'nodeWeb',
+    hc: 'nodeWeb', hd: 'nodeWeb', s1: 'nodeWeb', s2: 'nodeWeb', s3: 'nodeWeb'
   };
   const NODE_IPS = {
     client: D.ipClient, gateway: '192.168.1.1', dns: D.ipDns, dhcp: '192.168.1.1',
     web: D.ipWeb, target: D.ipWeb, mail: '198.51.100.25', ftp: '198.51.100.40',
-    r1: '10.0.12.1', r3: '10.0.23.3'
+    r1: '10.0.12.1', r3: '10.0.23.3', sw: '4 × 100 Mbps', s1: '', s2: '', s3: '',
+    ha: '', hb: '', hc: '', hd: ''
   };
 
   function isoFaces(w, h, d) {
@@ -196,6 +259,20 @@
         ? '<path class="node-detail" d="M-34,-46 l16,-16 M-18,-62 h28 M10,-62 l16,16"/>'
         : '<path class="node-faint" d="M-42,-46 l26,-15 h84"/>');
   }
+  function switchSvg(n) {
+    const count = n || 4, pw = 26, gap = 40, left = -((count - 1) * gap + pw) / 2;
+    return '' +
+      '<rect class="node-shape" x="-98" y="-40" width="196" height="80" rx="7"/>' +
+      '<rect class="node-detail" x="-88" y="-30" width="176" height="60" rx="4"/>' +
+      '<path class="node-faint" d="M-84,-16 h168"/>' +
+      '<text class="node-tag" x="0" y="-21" text-anchor="middle">SWITCH · L2</text>' +
+      Array.from({ length: count }, (_, i) => {
+        const x = left + i * gap;
+        return '<rect class="node-detail" x="' + x + '" y="2" width="' + pw + '" height="16" rx="2"/>' +
+          '<text class="node-tag" x="' + (x + pw / 2) + '" y="14" text-anchor="middle">P' + (i + 1) + '</text>' +
+          '<path class="node-faint" d="M' + x + ',24 l20,-10"/>';
+      }).join('');
+  }
   function urlSvg(scene) {
     const text = scene.url || '';
     return '' +
@@ -217,8 +294,10 @@
   }
 
   function linkPath(a, b) {
-    const p1 = POS[a], p2 = POS[b], g = POS.gateway;
+    const s = sc();
+    const p1 = (s.pos && s.pos[a]) || POS[a], p2 = (s.pos && s.pos[b]) || POS[b], g = POS.gateway;
     if (!p1 || !p2) return '';
+    if (sc().links) return 'M' + p1.x + ',' + p1.y + ' L' + p2.x + ',' + p2.y;
     if (a === 'gateway' || b === 'gateway') {
       return 'M' + p1.x + ',' + p1.y + ' Q ' + ((p1.x + p2.x) / 2) + ',' + ((p1.y + p2.y) / 2 - 48) + ' ' + p2.x + ',' + p2.y;
     }
@@ -352,12 +431,16 @@
   /* ---------------- 渲染：网络拓扑 ---------------- */
   function renderNetwork() {
     const s = sc();
-    // links
+    // links：优先使用场景显式给出的物理链路（交换 / STP 拓扑），否则从报文推导
     const pairs = [];
-    s.packets.forEach(p => {
-      const key = [p.from, p.to].sort().join('|');
-      if (p.from !== p.to && !pairs.some(x => x.key === key)) pairs.push({ key, a: p.from, b: p.to });
-    });
+    if (s.links) {
+      s.links.forEach(l => pairs.push({ key: [l[0], l[1]].sort().join('|'), a: l[0], b: l[1] }));
+    } else {
+      s.packets.forEach(p => {
+        const key = [p.from, p.to].sort().join('|');
+        if (p.from !== p.to && !pairs.some(x => x.key === key)) pairs.push({ key, a: p.from, b: p.to });
+      });
+    }
     $('linkLayer').innerHTML = pairs.map(x =>
       '<path class="link-line" id="link_' + x.key.replace('|', '_') + '" data-a="' + x.a + '" data-b="' + x.b +
       '" d="' + linkPath(x.a, x.b) + '" marker-end="url(#arrowHeadDim)"/>'
@@ -365,10 +448,12 @@
 
     // nodes
     $('nodeLayer').innerHTML = s.nodes.map(key => {
-      const pos = POS[key];
+      const pos = (s.pos && s.pos[key]) || POS[key];
       if (!pos) return '';
       const inner = key === 'url' ? urlSvg(s) :
-        (key === 'client' ? laptopSvg() : serverSvg(ROUTER_NODES.indexOf(key) >= 0 ? 'gateway' : key));
+        (key === 'client' || XL_HOST_NODES.indexOf(key) >= 0) ? laptopSvg() :
+          XL_SW_NODES.indexOf(key) >= 0 ? switchSvg(key === 'sw' ? 4 : (key === 's2' ? 2 : 3)) :
+            serverSvg(ROUTER_NODES.indexOf(key) >= 0 ? 'gateway' : key);
       const label = key === 'url' ? '' : nodeLabel(key, s);
       return '<g class="node" id="node_' + key + '" transform="translate(' + pos.x + ',' + pos.y + ')">' +
         inner + label + '</g>';
@@ -385,9 +470,11 @@
     });
     document.querySelectorAll('#linkLayer .link-line').forEach(pa => pa.classList.remove('active'));
     if (p) {
-      const key = [p.from, p.to].sort().join('_');
-      const el = $('link_' + key);
-      if (el) el.classList.add('active');
+      const route = p.via ? [[p.from, p.via], [p.via, p.to]] : [[p.from, p.to]];
+      route.forEach(pair => {
+        const el = $('link_' + pair.slice().sort().join('_'));
+        if (el) el.classList.add('active');
+      });
     }
     const s = sc();
     $('canvasCorner').textContent = p ? (p.src + '  →  ' + p.dst) : (s.packets[0] ? s.packets[0].src : D.ipClient);
@@ -438,35 +525,55 @@
     svg.innerHTML = out;
   }
 
-  /* ---------------- TCP 拥塞控制实验台 ---------------- */
+  /* ---------------- 通用实验台：按课程分派仿真内核与渲染器 ---------------- */
   const lab = {
     cfg: Object.assign({}, D.labDefault),
     rounds: D.labSimulate(D.labDefault),
-    at: 0, playing: false, timer: null
+    at: 0, playing: false, timer: null,
+    xl: { src: 'A', dst: 'B', in: 'auto' }
   };
+  const labDef = () => LAB_DEFS[state.scenario];
 
   function labStop() {
     lab.playing = false;
     if (lab.timer) clearTimeout(lab.timer);
     lab.timer = null;
   }
+  /* 切换课程时载入该实验的默认参数与步骤，避免不同实验共用一份状态 */
+  function labLoad(id) {
+    const def = LAB_DEFS[id];
+    if (!def) return;
+    labStop();
+    lab.at = 0;
+    lab.cfg = def.cfg();
+    lab.rounds = def.simulate(lab.cfg);
+  }
   /* 把实验进度同步到抓包表 / 总结 / 拓扑（不重绘实验面板，避免递归） */
   function labSyncTable(r) {
-    const s = sc();
-    if (!s || s.id !== 'tcpcc') return;
+    const s = sc(), def = labDef();
+    if (!s || !def) return;
+    const step = lab.rounds[r - 1];
     let idx = -1;
-    s.packets.forEach((p, i) => { if (p.rtt === r) idx = i; });
-    if (idx < 0) return;
+    if (step && step.p != null) idx = step.p;
+    else s.packets.forEach((p, i) => { if (p.rtt === r) idx = i; });
+    if (idx < 0 || idx >= s.packets.length) return;
     state.index = idx;
     renderHeader(); renderSidebar(); renderTable(); renderSummary(); renderNetworkState();
     $('visualHint').textContent = pk().title + '  ·  ' + pk().info;
   }
   function labRebuild() {
+    const def = labDef();
+    if (!def) return;
     labStop(); lab.at = 0;
-    lab.rounds = D.labSimulate(lab.cfg);
+    lab.rounds = def.simulate(lab.cfg);
+    state.index = 0;
+    renderHeader(); renderSidebar(); renderTable(); renderSummary(); renderNetworkState();
+    $('visualHint').textContent = T('labEmpty');
     renderLab();
   }
   function labPlay() {
+    const def = labDef();
+    if (!def) return;
     if (lab.playing) { labStop(); renderLab(); return; }
     if (lab.at >= lab.rounds.length) lab.at = 0;
     lab.playing = true;
@@ -483,23 +590,47 @@
     lab.timer = setTimeout(tick, 240);
   }
   function labStep(dir) {
+    if (!labDef()) return;
     labStop();
     lab.at = clamp(lab.at + (dir || 1), 0, lab.rounds.length);
     if (lab.at > 0) labSyncTable(lab.at);
     renderLab();
   }
   function labReset() {
+    const def = labDef();
+    if (!def) return;
     labStop(); lab.at = 0;
-    lab.rounds = D.labSimulate(lab.cfg);
+    lab.rounds = def.simulate(lab.cfg);
     state.index = 0;
     renderHeader(); renderSidebar(); renderTable(); renderSummary(); renderNetworkState();
     $('visualHint').textContent = T('labEmpty');
     renderLab();
   }
   function syncLabTab() {
-    const show = state.scenario === 'tcpcc';
-    $('labTab').hidden = !show;
-    if (!show && state.view === 'lab') setView('network');
+    const def = labDef();
+    $('labTab').hidden = !def;
+    if (def) {
+      const label = $('labTab').querySelector('[data-i18n]');
+      label.dataset.i18n = def.tab;
+      label.textContent = T(def.tab);
+    }
+    if (!def && state.view === 'lab') setView('network');
+  }
+  /* 自定义帧：追加一帧并重算转发表，让「自学习」可以自己动手试 */
+  function xlSendFrame() {
+    if (state.scenario !== 'switch') return;
+    const src = lab.xl.src, dst = lab.xl.dst, inV = lab.xl.in;
+    if (!src || !dst) return;
+    const frames = (lab.cfg.frames || D.swScripts[lab.cfg.script] || D.swScripts.learn).slice();
+    const f = { src: src, dst: dst };
+    if (inV && inV !== 'auto') f.in = +inV;
+    frames.push(f);
+    lab.cfg.frames = frames;
+    labStop();
+    lab.rounds = D.swSimulate(lab.cfg);
+    lab.at = lab.rounds.length;
+    labSyncTable(lab.at);
+    renderLab();
   }
 
   function labChartHTML(rs) {
@@ -630,20 +761,380 @@
       (lab.at >= rs.length ? '<div class="lab-empty">' + esc(T('labDone')) + '</div>' : '');
   }
 
+  /* ---------------- 实验台通用零件 ---------------- */
+  function xlOpts(key, list) {
+    return '<select data-lab="' + key + '">' + list.map(x =>
+      '<option value="' + esc(x.v) + '"' + (String(lab.cfg[key]) === String(x.v) ? ' selected' : '') +
+      '>' + esc(x.t) + '</option>').join('') + '</select>';
+  }
+  function xlCtrls(items) {
+    return '<div class="lab-ctrl">' + items.map(it =>
+      '<label>' + esc(it.k) + xlOpts(it.key, it.list) + '</label>').join('') + '</div>';
+  }
+  function xlButtons() {
+    return '<div class="lab-btns">' +
+      '<button data-lab-act="back" title="' + esc(T('labBack')) + '"><svg><use href="#i-left"/></svg></button>' +
+      '<button class="primary" data-lab-act="play"><svg><use href="#' + (lab.playing ? 'i-pause' : 'i-play') +
+      '"/></svg>' + esc(lab.playing ? T('labPause') : T('labPlay')) + '</button>' +
+      '<button data-lab-act="step" title="' + esc(T('labStep')) + '"><svg><use href="#i-step"/></svg></button>' +
+      '<button data-lab-act="reset" title="' + esc(T('labReset')) + '"><svg><use href="#i-reset"/></svg></button>' +
+      '</div>';
+  }
+  function xlMetric(k, v, wide) {
+    return '<div class="lab-metric' + (wide ? ' wide' : '') + '"><span class="k">' + esc(k) +
+      '</span><span class="v">' + esc(v) + '</span></div>';
+  }
+  function xlLogs(items) {
+    const body = items.slice(-7).reverse().map(x =>
+      '<div class="lab-log-item ' + (x.evt ? 'evt ' : '') + (x.r === lab.at ? 'cur' : '') + '">' +
+      '<b>' + esc(x.badge) + '</b><span>' + esc(x.text) + '</span></div>').join('');
+    return '<div class="lab-log-title">' + esc(T('labLog')) + '</div>' +
+      '<div class="lab-log">' + (body || '<div class="lab-empty">' + esc(T('labEmpty')) + '</div>') + '</div>';
+  }
+  function xlTimeline(rs, x, y, w, h) {
+    const n = rs.length, gap = 4;
+    const bw = Math.min(38, (w - gap * (n - 1)) / n);
+    const start = x + (w - (bw * n + gap * (n - 1))) / 2;
+    let o = '<text class="xl-tick" x="' + x + '" y="' + (y - 6) + '">' + esc(T('xlTimeline')) + '</text>';
+    rs.forEach((r, i) => {
+      const bx = start + i * (bw + gap);
+      o += '<g class="xl-tl-g' + (r.r <= lab.at ? ' on' : '') + '" data-lab-r="' + r.r + '">' +
+        '<rect class="xl-tl" x="' + bx + '" y="' + y + '" width="' + bw + '" height="' + h + '" rx="3"/>' +
+        '<text class="xl-tl-t" x="' + (bx + bw / 2) + '" y="' + (y + h / 2 + 3.5) + '">' + r.r + '</text></g>';
+    });
+    return o;
+  }
+  function xlArrow(a, b, t, color) {
+    const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+    const ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+    return '<path class="xl-arrow" style="fill:' + color + '" d="M0,0 L-11,-5 L-11,5 Z" ' +
+      'transform="translate(' + x + ',' + y + ') rotate(' + ang + ')"/>';
+  }
+  function xlBox(x, y, w, h, cls) {
+    return '<rect class="' + cls + '" x="' + (x - w / 2) + '" y="' + (y - h / 2) +
+      '" width="' + w + '" height="' + h + '" rx="6"/>';
+  }
+
+  /* ---------------- 交换机自学习实验：拓扑图 ---------------- */
+  const SW_X = { A: { x: 100, y: 74 }, B: { x: 100, y: 286 }, C: { x: 620, y: 74 }, D: { x: 620, y: 286 } };
+  const SW_PT = { 1: { x: 274, y: 150 }, 2: { x: 274, y: 202 }, 3: { x: 446, y: 150 }, 4: { x: 446, y: 202 } };
+  const SW_PORT_HOST = { 1: 'A', 2: 'B', 3: 'C', 4: 'D' };
+
+  function swChartHTML(rs) {
+    const cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const en = state.lang === 'en';
+    let o = '<text class="xl-chart-title" x="16" y="18">' + esc(T('xlChartSw')) + '</text>';
+
+    [1, 2, 3, 4].forEach(p => {
+      const h = SW_X[SW_PORT_HOST[p]], q = SW_PT[p];
+      let cls = 'xl-link';
+      if (cur) {
+        if (cur.inPort === p) cls = 'xl-link in';
+        else if (cur.egress.indexOf(p) >= 0) cls = cur.action === 'forward' ? 'xl-link out' : 'xl-link outflood';
+      }
+      o += '<path class="' + cls + '" d="M' + h.x + ',' + h.y + ' L' + q.x + ',' + q.y + '"/>';
+    });
+    if (cur) {
+      o += xlArrow(SW_X[SW_PORT_HOST[cur.inPort]], SW_PT[cur.inPort], 0.84, 'var(--blue-2)');
+      cur.egress.forEach(p => o += xlArrow(SW_PT[p], SW_X[SW_PORT_HOST[p]], 0.84,
+        cur.action === 'forward' ? 'var(--green)' : 'var(--amber)'));
+    }
+
+    o += '<rect class="xl-sw-box" x="274" y="116" width="172" height="116" rx="8"/>';
+    o += '<text class="xl-sw-title" x="360" y="142" text-anchor="middle">SW1</text>';
+    o += '<text class="xl-tick" x="360" y="158" text-anchor="middle">' +
+      esc(en ? 'MAC forwarding table' : '源 MAC 学习 → 目的查表') + '</text>';
+    if (cur) {
+      const lt = { add: T('xlLearnAdd'), move: T('xlLearnMove'), refresh: T('xlLearnRefresh') }[cur.learn];
+      o += '<text class="xl-learn" x="360" y="226" text-anchor="middle">' +
+        esc(cur.frame.src + ' ↔ P' + cur.inPort + ' · ' + lt) + '</text>';
+    }
+    if (cur && cur.action === 'filter') {
+      o += '<path class="xl-cross" d="M349,174 l22,20 M371,174 l-22,20"/>';
+      o += '<text class="xl-cross-t" x="360" y="212" text-anchor="middle">' + esc(en ? 'FILTERED' : '过滤丢弃') + '</text>';
+    }
+
+    [1, 2, 3, 4].forEach(p => {
+      const q = SW_PT[p];
+      const on = cur && (cur.inPort === p || cur.egress.indexOf(p) >= 0);
+      o += '<circle class="xl-port' + (on ? ' on' : '') + '" cx="' + q.x + '" cy="' + q.y + '" r="11"/>';
+      o += '<text class="xl-port-t" x="' + q.x + '" y="' + (q.y + 3) + '" text-anchor="middle">P' + p + '</text>';
+    });
+
+    Object.keys(SW_X).forEach(k => {
+      const p = SW_X[k];
+      const isSrc = cur && cur.frame.src === k;
+      const isDst = cur && cur.egress.indexOf(D.swPort[k]) >= 0;
+      o += xlBox(p.x, p.y, 118, 44, 'xl-node' + (isSrc ? ' src' : '') + (isDst ? ' dst' : ''));
+      o += '<text class="xl-node-t" x="' + p.x + '" y="' + (p.y - 3) + '" text-anchor="middle">' +
+        esc((en ? 'Host ' : '主机 ') + k) + '</text>';
+      o += '<text class="xl-node-s" x="' + p.x + '" y="' + (p.y + 12) + '" text-anchor="middle">' +
+        esc(D.swMac[k].slice(-8)) + '</text>';
+    });
+
+    const actTxt = cur ? {
+      flood: T('xlActFlood'), forward: T('xlActForward'), filter: T('xlActFilter'), bcast: T('xlActBcast')
+    }[cur.action] : T('xlNoFrame');
+    const badgeColor = cur && cur.action === 'filter' ? 'var(--red)' :
+      (cur && cur.action === 'forward' ? 'var(--green)' : 'var(--amber)');
+    o += '<rect class="xl-badge" x="452" y="30" width="248" height="26" rx="5" style="stroke:' + badgeColor + '"/>';
+    o += '<text class="xl-badge-t" x="576" y="47" text-anchor="middle" style="fill:' + badgeColor + '">' +
+      esc(actTxt) + '</text>';
+    o += '<text class="xl-tick" x="16" y="300">' + esc(en ?
+      'Frame ' + (cur ? cur.r : 0) + ' / ' + rs.length + '  ·  table entries: ' + (cur ? cur.table.length : 0) :
+      '第 ' + (cur ? cur.r : 0) + ' 帧 / 共 ' + rs.length + ' 帧  ·  表项 ' + (cur ? cur.table.length : 0) + ' 条') + '</text>';
+    o += xlTimeline(rs, 16, 336, 688, 24);
+    return o;
+  }
+
+  function swSideHTML(rs) {
+    const cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const en = state.lang === 'en';
+    const actTxt = cur ? {
+      flood: T('xlActFlood'), forward: T('xlActForward'), filter: T('xlActFilter'), bcast: T('xlActBcast')
+    }[cur.action] : T('xlNoFrame');
+    const shortAct = { flood: en ? 'FLOOD' : '泛洪', forward: en ? 'FORWARD' : '单播', filter: en ? 'FILTER' : '过滤', bcast: en ? 'BROADCAST' : '广播' };
+
+    const hostOpts = withBcast => D.swHosts.map(h =>
+      '<option value="' + h + '"' + (lab.xl[withBcast ? 'dst' : 'src'] === h ? ' selected' : '') + '>' +
+      esc((en ? 'Host ' : '主机 ') + h) + '</option>').join('') +
+      (withBcast ? '<option value="FF"' + (lab.xl.dst === 'FF' ? ' selected' : '') + '>' + esc(T('xlBroadcast')) + '</option>' : '');
+    const inOpts = '<option value="auto"' + (lab.xl.in === 'auto' ? ' selected' : '') + '>' + esc(T('xlInAuto')) + '</option>' +
+      [1, 2, 3, 4].map(p => '<option value="' + p + '"' + (lab.xl.in === String(p) ? ' selected' : '') +
+        '>P' + p + '</option>').join('');
+
+    const rows = cur && cur.table.length ? cur.table.map(x =>
+      '<tr' + ((cur.learn === 'add' || cur.learn === 'move') && cur.srcMac === x.mac ? ' class="hit"' : '') + '>' +
+      '<td>' + esc(x.mac) + '</td><td>P' + x.port + '</td><td>' + x.age + '</td></tr>').join('')
+      : '<tr><td colspan="3" class="xl-empty">' + esc(T('xlTableEmpty')) + '</td></tr>';
+
+    const logs = rs.slice(0, lab.at).map(x => ({
+      r: x.r, badge: 'F' + x.r,
+      text: x.frame.src + '→' + (x.frame.dst === 'FF' ? 'FF' : x.frame.dst) + ' · P' + x.inPort +
+        ' → ' + (x.egress.length ? 'P' + x.egress.join('/P') : '—') + ' · ' + shortAct[x.action],
+      evt: x.action === 'flood' || x.learn === 'move'
+    }));
+
+    return '<div class="lab-panel-title">' + esc(T('xlTitleSw')) + '</div>' +
+      '<div class="lab-note">' + esc(T('xlNoteSw')) + '</div>' +
+      xlCtrls([
+        { k: T('xlCfgScript'), key: 'script', list: [
+          { v: 'learn', t: T('xlScriptLearn') }, { v: 'aging', t: T('xlScriptAging') }, { v: 'move', t: T('xlScriptMove') }] },
+        { k: T('xlCfgAging'), key: 'aging', list: [
+          { v: 'off', t: T('xlAgingOff') }, { v: 'short', t: T('xlAgingShort') }] }
+      ]) +
+      '<div class="xl-custom">' +
+        '<label>' + esc(T('xlCfgSrc')) + '<select data-xl="src">' + hostOpts(false) + '</select></label>' +
+        '<label>' + esc(T('xlCfgDst')) + '<select data-xl="dst">' + hostOpts(true) + '</select></label>' +
+        '<label>' + esc(T('xlCfgIn')) + '<select data-xl="in">' + inOpts + '</select></label>' +
+      '</div>' +
+      '<button class="xl-send" data-xl-act="send">' + esc(T('xlSend')) + '</button>' +
+      xlButtons() +
+      '<div class="xl-table-title">' + esc(T('xlTable')) + '</div>' +
+      '<table class="xl-table"><thead><tr><th>' + esc(T('xlThMac')) + '</th><th>' + esc(T('xlThPort')) +
+        '</th><th>' + esc(T('xlThAge')) + '</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="lab-metrics">' +
+        xlMetric(T('xlStep'), (cur ? cur.r : 0) + ' / ' + rs.length) +
+        xlMetric(T('xlTableNum'), cur ? cur.table.length : 0) +
+        xlMetric(T('xlFloodNum'), cur ? cur.floods : 0) +
+        xlMetric(T('xlFwdNum'), cur ? cur.forwards : 0) +
+        xlMetric(T('xlFilterNum'), cur ? cur.filters : 0) +
+        xlMetric(T('xlIngress'), cur ? 'P' + cur.inPort : '—') +
+        xlMetric(T('xlAction'), actTxt, true) +
+      '</div>' +
+      xlLogs(logs) +
+      (lab.at >= rs.length ? '<div class="lab-empty">' + esc(T('xlStepDone')) + '</div>' : '');
+  }
+
+  /* ---------------- 生成树实验：拓扑图 ---------------- */
+  const STP_X = { s1: { x: 200, y: 104 }, s2: { x: 520, y: 104 }, s3: { x: 360, y: 252 }, ha: { x: 88, y: 252 }, hd: { x: 640, y: 252 } };
+  const STP_PHASE_KEY = {
+    boot: 'xlPhBoot', elect: 'xlPhElect', rootport: 'xlPhRootPort', designated: 'xlPhDesignated',
+    block: 'xlPhBlock', stable: 'xlPhStable', fail: 'xlPhFail', detect: 'xlPhDetect',
+    tcn: 'xlPhTcn', converge: 'xlPhConverge', final: 'xlPhFinal'
+  };
+
+  function stpChartHTML(rs) {
+    const cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const en = state.lang === 'en';
+    const R = cur && cur.roles ? cur.roles : null;
+    let o = '<text class="xl-chart-title" x="16" y="18">' + esc(T('xlChartStp')) + '</text>';
+
+    // 接主机的边缘链路（永远转发）
+    [['ha', 's1'], ['s3', 'hd']].forEach(pair => {
+      const a = STP_X[pair[0]], b = STP_X[pair[1]];
+      o += '<path class="xl-link" d="M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y + '"/>';
+    });
+
+    D.stpLinks.forEach(l => {
+      const a = STP_X[l.a], b = STP_X[l.b];
+      const failed = cur && cur.showFail && cur.fail === l.id;
+      const ra = R ? R.roles[l.a + ':' + l.pa] : null;
+      const rb = R ? R.roles[l.b + ':' + l.pb] : null;
+      const blocked = ra === 'ALT' || rb === 'ALT';
+      let cls = 'xl-link';
+      if (failed) cls = 'xl-link fail';
+      else if (blocked) cls = 'xl-link blk';
+      else if (R) cls = 'xl-link on';
+      if (cur && cur.focus === l.id) cls += ' focus';
+      o += '<path class="' + cls + '" d="M' + a.x + ',' + a.y + ' L' + b.x + ',' + b.y + '"/>';
+
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      if (failed) {
+        o += '<path class="xl-cross" d="M' + (mx - 8) + ',' + (my - 8) + ' l16,16 M' + (mx + 8) + ',' + (my - 8) + ' l-16,16"/>';
+        o += '<text class="xl-link-t" x="' + mx + '" y="' + (my + 24) + '" text-anchor="middle">' +
+          esc(en ? 'LINK DOWN' : '链路中断') + '</text>';
+      } else if (blocked) {
+        o += '<path class="xl-cross" d="M' + (mx - 8) + ',' + (my - 8) + ' l16,16 M' + (mx + 8) + ',' + (my - 8) + ' l-16,16"/>';
+        o += '<text class="xl-link-t" x="' + mx + '" y="' + (my + 24) + '" text-anchor="middle">' +
+          esc(en ? 'BLOCKED' : '逻辑阻塞') + '</text>';
+      }
+      // 端口角色标签放在链路两端靠交换机处；链路已断开时不再显示旧角色
+      if (R && !failed) {
+        [[l.a, l.pa, a, b, 0.38], [l.b, l.pb, b, a, 0.38]].forEach(q => {
+          const role = R.roles[q[0] + ':' + q[1]];
+          const px = q[2].x + (q[3].x - q[2].x) * q[4], py = q[2].y + (q[3].y - q[2].y) * q[4];
+          o += '<circle class="xl-role-dot r-' + role + '" cx="' + px + '" cy="' + py + '" r="11"/>';
+          o += '<text class="xl-role-dot-t" x="' + px + '" y="' + (py + 3) + '" text-anchor="middle">' +
+            esc(role === 'ALT' ? '×' : role) + '</text>';
+        });
+      }
+      // BPDU 流向：从根桥（或距离根更近的一端）向外，避开端口角色圆点
+      if (cur && cur.arrows && R && !failed && !blocked) {
+        const da = R.dist[l.a], db = R.dist[l.b];
+        const from = da <= db ? a : b, to = da <= db ? b : a;
+        o += xlArrow(from, to, 0.52, 'var(--blue)');
+      }
+    });
+
+    if (cur && (cur.phase === 'detect' || cur.phase === 'tcn')) {
+      o += '<path class="xl-tcn" d="M' + STP_X.s2.x + ',' + (STP_X.s2.y + 28) + ' Q 440,220 ' +
+        STP_X.s3.x + ',' + (STP_X.s3.y - 28) + ' M' + STP_X.s3.x + ',' + (STP_X.s3.y - 28) +
+        ' Q 280,170 ' + STP_X.s1.x + ',' + (STP_X.s1.y + 28) + '"/>';
+      o += '<text class="xl-link-t" x="440" y="196" text-anchor="middle">' + esc(T('xlTcnFlow')) + '</text>';
+    }
+
+    Object.keys(D.stpSwitches).forEach(k => {
+      const sw = D.stpSwitches[k], p = STP_X[k];
+      const isRoot = R && R.root === k;
+      const cls = 'xl-node' + (isRoot ? ' root' : '') + (cur && cur.focus === k ? ' focus' : '');
+      o += xlBox(p.x, p.y, 126, 48, cls);
+      o += '<text class="xl-node-t" x="' + p.x + '" y="' + (p.y - 3) + '" text-anchor="middle">' + esc(sw.name) + '</text>';
+      o += '<text class="xl-node-s" x="' + p.x + '" y="' + (p.y + 12) + '" text-anchor="middle">' +
+        esc(sw.mac.slice(-8)) + '</text>';
+      if (isRoot) {
+        o += '<rect class="xl-root-badge" x="' + (p.x - 26) + '" y="' + (p.y - 40) + '" width="52" height="17" rx="4"/>';
+        o += '<text class="xl-root-t" x="' + p.x + '" y="' + (p.y - 28) + '" text-anchor="middle">' +
+          esc(T('xlRootBadge')) + '</text>';
+      }
+      const rolesText = Object.keys(sw.ports).map(pn =>
+        'P' + pn + ' ' + (R ? (R.roles[k + ':' + pn] || '—') : '—')).join('  ');
+      o += '<text class="xl-role-line" x="' + p.x + '" y="' + (p.y + 38) + '" text-anchor="middle">' +
+        esc(rolesText) + '</text>';
+    });
+
+    [['ha', 'A'], ['hd', 'B']].forEach(pair => {
+      const p = STP_X[pair[0]];
+      o += xlBox(p.x, p.y, 84, 34, 'xl-node host');
+      o += '<text class="xl-node-t" x="' + p.x + '" y="' + (p.y + 4) + '" text-anchor="middle">' +
+        esc((en ? 'Host ' : '主机 ') + pair[1]) + '</text>';
+    });
+
+    const lx = 16, ly = 300;
+    o += '<rect class="xl-lg" x="' + lx + '" y="' + (ly - 8) + '" width="16" height="3"/>' +
+      '<text class="xl-tick" x="' + (lx + 22) + '" y="' + (ly - 2) + '">' + esc(T('xlLegendFwd')) + '</text>' +
+      '<rect class="xl-lg blk" x="' + (lx + 116) + '" y="' + (ly - 8) + '" width="16" height="3"/>' +
+      '<text class="xl-tick" x="' + (lx + 138) + '" y="' + (ly - 2) + '">' + esc(T('xlLegendBlk')) + '</text>' +
+      '<rect class="xl-lg fail" x="' + (lx + 232) + '" y="' + (ly - 8) + '" width="16" height="3"/>' +
+      '<text class="xl-tick" x="' + (lx + 254) + '" y="' + (ly - 2) + '">' + esc(T('xlLegendFail')) + '</text>';
+    o += '<text class="xl-tick" x="704" y="' + (ly - 2) + '" text-anchor="end">' +
+      esc(cur ? T(STP_PHASE_KEY[cur.phase]) : T('xlNoFrame')) + '</text>';
+    o += xlTimeline(rs, 16, 336, 688, 24);
+    return o;
+  }
+
+  function stpSideHTML(rs) {
+    const cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const en = state.lang === 'en';
+    const R = cur && cur.roles ? cur.roles : null;
+    const failOpts = [{ v: 'none', t: T('xlFailNone') }].concat(D.stpLinks.map(l => ({ v: l.id, t: l.label })));
+    const rolesRows = Object.keys(D.stpSwitches).map(k => {
+      const sw = D.stpSwitches[k];
+      const chips = Object.keys(sw.ports).map(pn => {
+        const role = R ? (R.roles[k + ':' + pn] || 'DOWN') : null;
+        return '<i class="xl-role' + (role ? ' r-' + role : '') + '" title="' +
+          esc(role ? T('xlRole' + role) : T('labReady')) + '">P' + pn + ' ' + (role || '—') + '</i>';
+      }).join('');
+      return '<div class="xl-role-row"><b>' + esc(sw.name) + '</b><span>' + chips + '</span></div>';
+    }).join('');
+    const logs = rs.slice(0, lab.at).map(x => ({
+      r: x.r, badge: 'S' + x.r, text: T(STP_PHASE_KEY[x.phase]),
+      evt: x.phase === 'fail' || x.phase === 'detect' || x.phase === 'tcn' || x.phase === 'converge'
+    }));
+
+    return '<div class="lab-panel-title">' + esc(T('xlTitleStp')) + '</div>' +
+      '<div class="lab-note">' + esc(T('xlNoteStp')) + '</div>' +
+      xlCtrls([
+        { k: T('xlCfgRoot'), key: 'root', list: Object.keys(D.stpSwitches).map(k => ({ v: k, t: D.stpSwitches[k].name })) },
+        { k: T('xlCfgFail'), key: 'fail', list: failOpts },
+        { k: T('xlCfgProto'), key: 'proto', list: [
+          { v: 'stp', t: T('xlProtoStp') }, { v: 'rstp', t: T('xlProtoRstp') }] }
+      ]) +
+      xlButtons() +
+      '<div class="lab-metrics">' +
+        xlMetric(T('xlStep'), (cur ? cur.r : 0) + ' / ' + rs.length) +
+        xlMetric(T('xlRootMetric'), cur ? D.stpSwitches[cur.root].name : '—') +
+        xlMetric(T('xlBlockMetric'), cur ? cur.blockedCount : 0) +
+        xlMetric(T('xlCostMetric'), cur ? cur.rootCost : 0) +
+        xlMetric(T('xlConvMetric'), cur ? cur.convTime : '—') +
+        xlMetric(T('xlPhase'), cur ? T(STP_PHASE_KEY[cur.phase]) : T('xlNoFrame'), true) +
+      '</div>' +
+      '<div class="xl-table-title">' + esc(T('xlRoles')) + '</div>' +
+      '<div class="xl-roles">' + rolesRows + '</div>' +
+      xlLogs(logs) +
+      (lab.at >= rs.length ? '<div class="lab-empty">' + esc(T('xlStepDone')) + '</div>' : '');
+  }
+
+  /* ---------------- 实验注册表 ---------------- */
+  const LAB_DEFS = {
+    tcpcc: {
+      tab: 'labView', cfg: () => Object.assign({}, D.labDefault), simulate: c => D.labSimulate(c),
+      chart: rs => labChartHTML(rs), side: rs => labSideHTML(rs), aria: () => T('labChartTitle'),
+      strip: (t, en) => en ? t.replace(/^RTT \d+: /, '') : t.replace(/^RTT \d+：/, ''),
+      tag: r => 'RTT ' + r,
+      evt: cur => !!(cur && cur.event)
+    },
+    switch: {
+      tab: 'swLabView', cfg: () => Object.assign({}, D.swDefault), simulate: c => D.swSimulate(c),
+      chart: rs => swChartHTML(rs), side: rs => swSideHTML(rs), aria: () => T('xlChartSw'),
+      strip: (t, en) => en ? t.replace(/^Frame \d+: /, '') : t.replace(/^帧 \d+：/, ''),
+      tag: r => (state.lang === 'en' ? 'Frame ' : '帧 ') + r,
+      evt: cur => !!(cur && (cur.action === 'flood' || cur.learn === 'move' || cur.action === 'filter'))
+    },
+    stp: {
+      tab: 'stpLabView', cfg: () => Object.assign({}, D.stpDefault), simulate: c => D.stpSimulate(c),
+      chart: rs => stpChartHTML(rs), side: rs => stpSideHTML(rs), aria: () => T('xlChartStp'),
+      strip: (t, en) => en ? t.replace(/^Stage \d+ · [^:]+: /, '') : t.replace(/^阶段 \d+ · [^：]+：/, ''),
+      tag: r => (state.lang === 'en' ? 'Stage ' : '阶段 ') + r,
+      evt: cur => !!(cur && ['fail', 'detect', 'tcn', 'converge'].indexOf(cur.phase) >= 0)
+    }
+  };
+
   function renderLab() {
-    if (state.view !== 'lab' || state.scenario !== 'tcpcc') return;
-    if (!lab.rounds.length) lab.rounds = D.labSimulate(lab.cfg);
-    $('labSvg').innerHTML = labChartHTML(lab.rounds);
-    $('labSide').innerHTML = labSideHTML(lab.rounds);
+    const def = labDef();
+    if (state.view !== 'lab' || !def) return;
+    if (!lab.rounds.length) lab.rounds = def.simulate(lab.cfg);
+    const svg = $('labSvg');
+    svg.innerHTML = def.chart(lab.rounds);
+    svg.setAttribute('aria-label', def.aria());
+    $('labSide').innerHTML = def.side(lab.rounds);
     const cur = lab.at > 0 ? lab.rounds[lab.at - 1] : null;
     const ex = $('labExplain');
-    ex.className = 'lab-explain' + (cur && cur.event ? ' evt' : '');
-    const body = cur
-      ? (state.lang === 'en' ? cur.en.replace(/^RTT \d+: /, '') : cur.zh.replace(/^RTT \d+：/, ''))
-      : T('labEmpty');
+    ex.className = 'lab-explain' + (def.evt(cur) ? ' evt' : '');
     ex.innerHTML = cur
-      ? '<b>RTT ' + cur.r + '</b><span>' + esc(body) + '</span>'
-      : '<b>—</b><span>' + esc(body) + '</span>';
+      ? '<b>' + esc(def.tag(cur.r)) + '</b><span>' +
+        esc(def.strip(state.lang === 'en' ? cur.en : cur.zh, state.lang === 'en')) + '</span>'
+      : '<b>—</b><span>' + esc(T('labEmpty')) + '</span>';
   }
 
   /* ---------------- 动画 ---------------- */
@@ -753,7 +1244,7 @@
     state.index = sc().packets.length - 1; // 初始展示完成态，便于直接阅读
     closeModal();
     syncLabTab();
-    if (id === 'tcpcc' && state.view === 'lab') labRebuild();
+    if (LAB_DEFS[id]) labLoad(id);
     renderNetwork();
     renderCurrent();
   }
@@ -876,7 +1367,7 @@
 
   /* SVG 元素没有 HTMLElement.hidden 的 IDL 属性，须显式控制 display */
   function setView(v) {
-    if (v === 'lab' && state.scenario !== 'tcpcc') v = 'network';
+    if (v === 'lab' && !LAB_DEFS[state.scenario]) v = 'network';
     state.view = v;
     const net = $('networkSvg'), seq = $('sequenceWrap'), wrap = $('labWrap');
     seq.removeAttribute('hidden');
@@ -925,6 +1416,8 @@
         renderLab();
         return;
       }
+      const xa = e.target.closest('[data-xl-act]');
+      if (xa && xa.dataset.xlAct === 'send') { xlSendFrame(); return; }
       const btn = e.target.closest('[data-lab-act]');
       if (!btn) return;
       const act = btn.dataset.labAct;
@@ -934,10 +1427,13 @@
       else if (act === 'reset') labReset();
     });
     $('labWrap').addEventListener('change', e => {
+      const custom = e.target.closest('select[data-xl]');
+      if (custom) { lab.xl[custom.dataset.xl] = custom.value; return; }
       const sel = e.target.closest('select[data-lab]');
       if (!sel) return;
       const key = sel.dataset.lab;
-      lab.cfg[key] = (key === 'ssthresh' || key === 'lossRound') ? +sel.value : sel.value;
+      lab.cfg[key] = /^-?\d+$/.test(sel.value) ? +sel.value : sel.value;
+      if (key === 'script') lab.cfg.frames = null;
       labRebuild();
     });
 
