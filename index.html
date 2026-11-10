@@ -102,6 +102,7 @@
           <div class="view-tabs">
             <button class="active" data-view="network"><span class="vt-ico">◈</span><span data-i18n="networkView">网络</span></button>
             <button data-view="sequence"><span class="vt-ico">≋</span><span data-i18n="timingView">时序</span></button>
+            <button data-view="lab" id="labTab" hidden><span class="vt-ico">∿</span><span data-i18n="labView">拥塞实验</span></button>
           </div>
           <div class="visual-meta">
             <span class="scene-chip" id="sceneChip">场景 01</span>
@@ -137,6 +138,14 @@
 
           <div class="sequence-wrap" id="sequenceWrap" hidden>
             <svg id="sequenceSvg" viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="协议时序图"></svg>
+          </div>
+
+          <div class="lab-wrap" id="labWrap" hidden>
+            <div class="lab-chart">
+              <svg id="labSvg" viewBox="0 0 720 380" preserveAspectRatio="xMidYMid meet" role="img" aria-label="拥塞窗口 cwnd 随 RTT 变化曲线"></svg>
+              <div class="lab-explain" id="labExplain"></div>
+            </div>
+            <div class="lab-side" id="labSide"></div>
           </div>
 
           <div class="canvas-legend" id="canvasLegend"></div>

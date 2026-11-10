@@ -48,7 +48,22 @@
       nodeR1: '路由器 R1', nodeR3: '路由器 R3',
       seqTitle: '协议时序 · 纵向为时间', detailTitle: '展开报文',
       statAll: '全部', statBase: '基础', statApp: '应用', statSec: '安全',
-      schoolShort: '浙江工商大学', authorShort: '邢建国'
+      schoolShort: '浙江工商大学', authorShort: '邢建国',
+      labView: '拥塞实验', labTitle: '拥塞窗口实验台',
+      labNote: '下方抓包表记录默认参数（Reno / ssthresh=8 / 3 个重复 ACK）下的一次过程；此处改参数会重算曲线，抓包表保持默认记录。',
+      labAlgo: '拥塞算法', labSsthresh: '初始阈值', labLoss: '丢包信号', labLossRound: '丢包发生在',
+      algoReno: 'Reno · 快恢复', algoTahoe: 'Tahoe · 回慢启动',
+      lossDup: '3 个重复 ACK', lossTimeout: 'RTO 超时',
+      labPlay: '播放', labPause: '暂停', labStep: '单步', labBack: '后退', labReset: '重置',
+      labRound: '当前 RTT', labCwnd: '拥塞窗口 cwnd', labSsthNow: '慢启动阈值', labPhase: '所处阶段',
+      labSent: '本轮发送', labTotal: '累计发送', labRate: '估算吞吐',
+      phaseSS: '慢启动', phaseCA: '拥塞避免', phaseFR: '快恢复 / 重传',
+      phaseTO: 'RTO 超时 · 重回慢启动', phaseRT: '快重传 · 回慢启动',
+      labLog: '实验记录', labEmpty: '点击「播放」或「单步」开始实验',
+      labChartTitle: '拥塞窗口 cwnd（单位：MSS = 1460 字节）', labAxisRTT: 'RTT 轮次',
+      labCwndLegend: 'cwnd', labSsthLegend: 'ssthresh',
+      labEventDup: '3 dup ACK', labEventTimeout: 'RTO 超时', labInfl: '快恢复膨胀',
+      labReady: '尚未开始', labDone: '本轮实验结束，可重置后换参数再跑'
     },
     en: {
       tagline: 'Learn how the Internet works', learning: 'Studying', layer: 'App layer', progress: 'Progress',
@@ -71,7 +86,22 @@
       nodeR1: 'Router R1', nodeR3: 'Router R3',
       seqTitle: 'Sequence diagram · vertical = time', detailTitle: 'Inspect packet',
       statAll: 'All', statBase: 'Core', statApp: 'App', statSec: 'Secure',
-      schoolShort: 'Zhejiang Gongshang Univ.', authorShort: 'Jianguo Xing'
+      schoolShort: 'Zhejiang Gongshang Univ.', authorShort: 'Jianguo Xing',
+      labView: 'Congestion Lab', labTitle: 'Congestion Window Lab',
+      labNote: 'The capture table below shows one run with default settings (Reno / ssthresh=8 / 3 dup ACKs). Changing parameters here recomputes the curve only.',
+      labAlgo: 'Algorithm', labSsthresh: 'Initial ssthresh', labLoss: 'Loss signal', labLossRound: 'Loss at',
+      algoReno: 'Reno · fast recovery', algoTahoe: 'Tahoe · slow start',
+      lossDup: '3 duplicate ACKs', lossTimeout: 'RTO timeout',
+      labPlay: 'Play', labPause: 'Pause', labStep: 'Step', labBack: 'Back', labReset: 'Reset',
+      labRound: 'Current RTT', labCwnd: 'Congestion window', labSsthNow: 'ssthresh', labPhase: 'Phase',
+      labSent: 'Sent this RTT', labTotal: 'Total segments', labRate: 'Est. throughput',
+      phaseSS: 'Slow start', phaseCA: 'Congestion avoidance', phaseFR: 'Fast recovery',
+      phaseTO: 'RTO timeout · slow start', phaseRT: 'Fast retransmit · slow start',
+      labLog: 'Experiment log', labEmpty: 'Press Play or Step to start the experiment',
+      labChartTitle: 'Congestion window cwnd (unit: MSS = 1460 bytes)', labAxisRTT: 'RTT round',
+      labCwndLegend: 'cwnd', labSsthLegend: 'ssthresh',
+      labEventDup: '3 dup ACKs', labEventTimeout: 'RTO timeout', labInfl: 'Fast recovery inflation',
+      labReady: 'Not started', labDone: 'Run complete — reset and try another configuration'
     }
   };
   const STAT_EN = {
@@ -93,7 +123,9 @@
     '最大跳数': 'Max hops', 'IP 协议号': 'IP protocol', '路由算法': 'Algorithm',
     '报文类型': 'Packet types', '建连开销': 'Setup cost', '传输层': 'Transport',
     '协议版本': 'Version', '会话类型': 'Session type', '保活周期': 'Keepalive',
-    '路径属性': 'Path attributes'
+    '路径属性': 'Path attributes',
+    '拥塞算法': 'Algorithms', '初始阈值': 'Initial ssthresh', '默认丢包': 'Default loss',
+    '发送窗口': 'Send window', 'MSS / RTT': 'MSS / RTT'
   };
   const T = k => (I18N[state.lang] || I18N.zh)[k] || k;
   const trStat = k => state.lang === 'en' ? (STAT_EN[k] || k) : k;
@@ -103,7 +135,8 @@
     udp: '数据报已送达', ip: '分组已投递', arp: '地址已解析', icmp: '目标可达',
     dhcp: 'IP 地址已分配', tls: '安全通道已建立', websocket: '实时通道已建立',
     smtp: '邮件已投递', ftp: '文件列表已送达', quic: 'HTTP/3 响应已送达',
-    rip: '路由表已收敛', ospf: '链路状态已同步', bgp: '域间路由已收敛'
+    rip: '路由表已收敛', ospf: '链路状态已同步', bgp: '域间路由已收敛',
+    tcpcc: '拥塞窗口已收敛'
   };
   const sc = () => D.scenarios[state.scenario];
   const pk = () => sc().packets[state.index] || null;
@@ -380,7 +413,7 @@
 
     cols.forEach(c => {
       const custom = (s.labels || {})[c] || {};
-      const name = custom.name || T(NODE_NAMES[c] || 'nodeWeb');
+      const name = (state.lang === 'en' && custom.en) || custom.name || T(NODE_NAMES[c] || 'nodeWeb');
       const ip = custom.ip || NODE_IPS[c] || '';
       out += '<path class="seq-line" d="M' + X[c] + ',70 V500"/>';
       out += '<rect class="seq-head-box" x="' + (X[c] - 82) + '" y="36" width="164" height="38" rx="5"/>';
@@ -403,6 +436,214 @@
       out += '<text class="seq-num-text" x="' + (a + (b - a) * 0.14) + '" y="' + y + '">' + (i + 1) + '</text>';
     });
     svg.innerHTML = out;
+  }
+
+  /* ---------------- TCP 拥塞控制实验台 ---------------- */
+  const lab = {
+    cfg: Object.assign({}, D.labDefault),
+    rounds: D.labSimulate(D.labDefault),
+    at: 0, playing: false, timer: null
+  };
+
+  function labStop() {
+    lab.playing = false;
+    if (lab.timer) clearTimeout(lab.timer);
+    lab.timer = null;
+  }
+  /* 把实验进度同步到抓包表 / 总结 / 拓扑（不重绘实验面板，避免递归） */
+  function labSyncTable(r) {
+    const s = sc();
+    if (!s || s.id !== 'tcpcc') return;
+    let idx = -1;
+    s.packets.forEach((p, i) => { if (p.rtt === r) idx = i; });
+    if (idx < 0) return;
+    state.index = idx;
+    renderHeader(); renderSidebar(); renderTable(); renderSummary(); renderNetworkState();
+    $('visualHint').textContent = pk().title + '  ·  ' + pk().info;
+  }
+  function labRebuild() {
+    labStop(); lab.at = 0;
+    lab.rounds = D.labSimulate(lab.cfg);
+    renderLab();
+  }
+  function labPlay() {
+    if (lab.playing) { labStop(); renderLab(); return; }
+    if (lab.at >= lab.rounds.length) lab.at = 0;
+    lab.playing = true;
+    renderLab();
+    const tick = () => {
+      if (!lab.playing) return;
+      if (lab.at >= lab.rounds.length) { labStop(); renderLab(); return; }
+      lab.at++;
+      labSyncTable(lab.at);
+      renderLab();
+      if (lab.at >= lab.rounds.length) { labStop(); renderLab(); return; }
+      lab.timer = setTimeout(tick, 680 / state.speed);
+    };
+    lab.timer = setTimeout(tick, 240);
+  }
+  function labStep(dir) {
+    labStop();
+    lab.at = clamp(lab.at + (dir || 1), 0, lab.rounds.length);
+    if (lab.at > 0) labSyncTable(lab.at);
+    renderLab();
+  }
+  function labReset() {
+    labStop(); lab.at = 0;
+    lab.rounds = D.labSimulate(lab.cfg);
+    state.index = 0;
+    renderHeader(); renderSidebar(); renderTable(); renderSummary(); renderNetworkState();
+    $('visualHint').textContent = T('labEmpty');
+    renderLab();
+  }
+  function syncLabTab() {
+    const show = state.scenario === 'tcpcc';
+    $('labTab').hidden = !show;
+    if (!show && state.view === 'lab') setView('network');
+  }
+
+  function labChartHTML(rs) {
+    const L = 54, R = 700, TOP = 40, BOT = 322, N = rs.length;
+    const peak = Math.max.apply(null, [14].concat(rs.map(x => Math.max(x.cwnd, x.ssthresh, x.infl || 0))));
+    const maxY = Math.ceil(peak * 1.16 / 2) * 2;
+    const X = r => L + (R - L) * (r - 1) / (N - 1);
+    const Y = v => BOT - (BOT - TOP) * v / maxY;
+    let o = '';
+
+    for (let i = 0; i <= 4; i++) {
+      const v = maxY * i / 4, y = Y(v);
+      o += '<path class="lab-grid" d="M' + L + ',' + y + ' H' + R + '"/>';
+      o += '<text class="lab-tick" x="' + (L - 9) + '" y="' + (y + 3.5) + '" text-anchor="end">' +
+        (Number.isInteger(v) ? v : v.toFixed(1)) + '</text>';
+    }
+    o += '<path class="lab-axis" d="M' + L + ',' + TOP + ' V' + BOT + ' H' + R + '"/>';
+    rs.forEach(x => {
+      if (x.r % 2 === 1 || x.r === N)
+        o += '<text class="lab-tick" x="' + X(x.r) + '" y="' + (BOT + 15) + '" text-anchor="middle">' + x.r + '</text>';
+    });
+
+    o += '<polyline class="lab-ssth" points="' + rs.map(x => X(x.r) + ',' + Y(x.ssthresh)).join(' ') + '"/>';
+    o += '<polyline class="lab-line-dim" points="' + rs.map(x => X(x.r) + ',' + Y(x.cwnd)).join(' ') + '"/>';
+
+    if (lab.at >= 2) {
+      const pts = rs.slice(0, lab.at).map(x => [X(x.r), Y(x.cwnd)]);
+      o += '<path class="lab-area" d="M' + pts[0][0] + ',' + BOT + ' L' +
+        pts.map(p => p[0] + ',' + p[1]).join(' L') + ' L' + pts[pts.length - 1][0] + ',' + BOT + ' Z"/>';
+      o += '<polyline class="lab-line" points="' + pts.map(p => p[0] + ',' + p[1]).join(' ') + '"/>';
+    }
+
+    rs.forEach(x => {
+      if (!x.event) return;
+      const px = X(x.r);
+      o += '<path class="lab-evt-line" d="M' + px + ',' + TOP + ' V' + BOT + '"/>';
+      o += '<circle class="lab-evt-dot" cx="' + px + '" cy="' + Y(x.cwnd) + '" r="5"/>';
+      o += '<text class="lab-evt-lbl" x="' + px + '" y="' + (TOP - 8) + '" text-anchor="middle">' +
+        esc(x.event === 'timeout' ? T('labEventTimeout') : T('labEventDup')) + '</text>';
+      if (x.infl) {
+        const ix = px + 30, iy = Y(x.infl);
+        o += '<path class="lab-infl" d="M' + px + ',' + Y(x.cwnd) + ' L' + ix + ',' + iy + '"/>';
+        o += '<rect x="' + (ix - 4) + '" y="' + (iy - 4) + '" width="8" height="8" transform="rotate(45 ' + ix + ' ' + iy + ')" ' +
+          'style="fill:var(--amber);stroke:var(--panel);stroke-width:1.5"/>';
+        o += '<text class="lab-tick" x="' + (ix + 10) + '" y="' + (iy + 3) + '">cwnd→' + x.infl + '</text>';
+      }
+    });
+
+    rs.forEach(x => {
+      o += '<circle class="lab-dot ' + (x.r <= lab.at ? 'on' : '') + '" cx="' + X(x.r) + '" cy="' + Y(x.cwnd) + '" r="3.6"/>';
+    });
+
+    if (lab.at >= 1) {
+      const c = rs[lab.at - 1], px = X(c.r), py = Y(c.cwnd);
+      o += '<circle class="lab-cur-ring" cx="' + px + '" cy="' + py + '" r="11"/>';
+      o += '<circle class="lab-cur" cx="' + px + '" cy="' + py + '" r="6"/>';
+      o += '<text class="lab-cur-lbl" x="' + px + '" y="' + (py - 15) + '" text-anchor="middle">cwnd=' + c.cwnd + '</text>';
+    }
+
+    const half = (R - L) / (N - 1) / 2;
+    rs.forEach(x => {
+      o += '<rect class="lab-hit" x="' + (X(x.r) - half) + '" y="' + TOP + '" width="' + (half * 2) +
+        '" height="' + (BOT - TOP) + '" data-lab-r="' + x.r + '"><title>RTT ' + x.r + '</title></rect>';
+    });
+
+    o += '<text class="lab-chart-title" x="' + L + '" y="18">' + esc(T('labChartTitle')) + '</text>';
+    const lx = R - 196;
+    o += '<rect x="' + lx + '" y="9" width="14" height="3" style="fill:var(--blue)"/>' +
+      '<text class="lab-legend-text" x="' + (lx + 19) + '" y="15">' + esc(T('labCwndLegend')) + '</text>' +
+      '<rect x="' + (lx + 84) + '" y="9" width="14" height="3" style="fill:var(--purple)"/>' +
+      '<text class="lab-legend-text" x="' + (lx + 103) + '" y="15">' + esc(T('labSsthLegend')) + '</text>';
+    o += '<text class="lab-tick" x="' + R + '" y="' + (BOT + 31) + '" text-anchor="end">' + esc(T('labAxisRTT')) + '</text>';
+    return o;
+  }
+
+  function labSideHTML(rs) {
+    const en = state.lang === 'en';
+    const cur = lab.at > 0 ? rs[lab.at - 1] : null;
+    const phaseName = !cur ? T('labReady') :
+      (cur.event === 'timeout' ? T('phaseTO') :
+        (cur.event === 'dupack' ? (cur.infl ? T('phaseFR') : T('phaseRT')) :
+          (cur.phase === 'ss' ? T('phaseSS') : T('phaseCA'))));
+    const rate = cur ? (cur.cwnd * 1460 * 8 / 0.04 / 1e6).toFixed(2) + ' Mbps' : '—';
+    const opts = (key, list) => list.map(x =>
+      '<option value="' + x.v + '"' + (String(lab.cfg[key]) === String(x.v) ? ' selected' : '') + '>' + esc(x.t) + '</option>'
+    ).join('');
+
+    const metric = (k, v, wide) =>
+      '<div class="lab-metric' + (wide ? ' wide' : '') + '"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>';
+    const logs = rs.slice(0, lab.at).slice(-7).reverse().map(x => {
+      const tag = x.event
+        ? (x.event === 'timeout' ? (en ? 'RTO timeout' : 'RTO 超时') : (en ? '3 dup ACKs' : '3 个重复 ACK'))
+        : (x.phase === 'ss' ? T('phaseSS') : T('phaseCA'));
+      return '<div class="lab-log-item ' + (x.event ? 'evt ' : '') + (x.r === lab.at ? 'cur' : '') + '">' +
+        '<b>R' + x.r + '</b><span>' + esc(tag) + ' · cwnd ' + x.cwnd + '→' + x.endCwnd + '</span></div>';
+    }).join('');
+
+    return '<div class="lab-panel-title">' + esc(T('labTitle')) + '</div>' +
+      '<div class="lab-note">' + esc(T('labNote')) + '</div>' +
+      '<div class="lab-ctrl">' +
+        '<label>' + esc(T('labAlgo')) + '<select data-lab="algo">' +
+          opts('algo', [{ v: 'reno', t: T('algoReno') }, { v: 'tahoe', t: T('algoTahoe') }]) + '</select></label>' +
+        '<label>' + esc(T('labSsthresh')) + '<select data-lab="ssthresh">' +
+          opts('ssthresh', [8, 16, 32].map(v => ({ v: v, t: v + ' MSS' }))) + '</select></label>' +
+        '<label>' + esc(T('labLoss')) + '<select data-lab="lossMode">' +
+          opts('lossMode', [{ v: 'dupack', t: T('lossDup') }, { v: 'timeout', t: T('lossTimeout') }]) + '</select></label>' +
+        '<label>' + esc(T('labLossRound')) + '<select data-lab="lossRound">' +
+          opts('lossRound', [6, 8, 10].map(v => ({ v: v, t: 'RTT ' + v }))) + '</select></label>' +
+      '</div>' +
+      '<div class="lab-btns">' +
+        '<button data-lab-act="back" title="' + esc(T('labBack')) + '"><svg><use href="#i-left"/></svg></button>' +
+        '<button class="primary" data-lab-act="play"><svg><use href="#' + (lab.playing ? 'i-pause' : 'i-play') + '"/></svg>' +
+          esc(lab.playing ? T('labPause') : T('labPlay')) + '</button>' +
+        '<button data-lab-act="step" title="' + esc(T('labStep')) + '"><svg><use href="#i-step"/></svg></button>' +
+        '<button data-lab-act="reset" title="' + esc(T('labReset')) + '"><svg><use href="#i-reset"/></svg></button>' +
+      '</div>' +
+      '<div class="lab-metrics">' +
+        metric(T('labRound'), (cur ? cur.r : 0) + ' / ' + rs.length) +
+        metric(T('labCwnd'), (cur ? cur.cwnd : 1) + ' MSS') +
+        metric(T('labSsthNow'), (cur ? cur.ssthresh : lab.cfg.ssthresh) + ' MSS') +
+        metric(T('labSent'), (cur ? cur.sent : 0) + ' seg') +
+        metric(T('labTotal'), (cur ? cur.total : 0) + ' seg') +
+        metric(T('labRate'), rate) +
+        metric(T('labPhase'), phaseName, true) +
+      '</div>' +
+      '<div class="lab-log-title">' + esc(T('labLog')) + '</div>' +
+      '<div class="lab-log">' + (logs || '<div class="lab-empty">' + esc(T('labEmpty')) + '</div>') + '</div>' +
+      (lab.at >= rs.length ? '<div class="lab-empty">' + esc(T('labDone')) + '</div>' : '');
+  }
+
+  function renderLab() {
+    if (state.view !== 'lab' || state.scenario !== 'tcpcc') return;
+    if (!lab.rounds.length) lab.rounds = D.labSimulate(lab.cfg);
+    $('labSvg').innerHTML = labChartHTML(lab.rounds);
+    $('labSide').innerHTML = labSideHTML(lab.rounds);
+    const cur = lab.at > 0 ? lab.rounds[lab.at - 1] : null;
+    const ex = $('labExplain');
+    ex.className = 'lab-explain' + (cur && cur.event ? ' evt' : '');
+    const body = cur
+      ? (state.lang === 'en' ? cur.en.replace(/^RTT \d+: /, '') : cur.zh.replace(/^RTT \d+：/, ''))
+      : T('labEmpty');
+    ex.innerHTML = cur
+      ? '<b>RTT ' + cur.r + '</b><span>' + esc(body) + '</span>'
+      : '<b>—</b><span>' + esc(body) + '</span>';
   }
 
   /* ---------------- 动画 ---------------- */
@@ -448,6 +689,7 @@
     renderSummary();
     renderNetworkState();
     if (state.view === 'sequence') renderSequence();
+    if (state.view === 'lab') renderLab();
     $('visualHint').textContent = state.index < 0 ? T('visualHint') :
       (pk().title + '  ·  ' + pk().info);
     $('sceneChip').textContent = (state.lang === 'en' ? 'SCENE ' : '场景 ') +
@@ -499,16 +741,19 @@
   }
   function resetAll() {
     state.playing = false; clearAnim(); updatePlayBtn();
+    if (state.view === 'lab') { labReset(); return; }
     state.index = -1;
     renderCurrent();
     renderNetworkState();
   }
   function switchScenario(id) {
     if (!D.scenarios[id]) return;
-    state.playing = false; clearAnim(); updatePlayBtn();
+    state.playing = false; clearAnim(); updatePlayBtn(); labStop();
     state.scenario = id;
     state.index = sc().packets.length - 1; // 初始展示完成态，便于直接阅读
     closeModal();
+    syncLabTab();
+    if (id === 'tcpcc' && state.view === 'lab') labRebuild();
     renderNetwork();
     renderCurrent();
   }
@@ -631,12 +876,21 @@
 
   /* SVG 元素没有 HTMLElement.hidden 的 IDL 属性，须显式控制 display */
   function setView(v) {
+    if (v === 'lab' && state.scenario !== 'tcpcc') v = 'network';
     state.view = v;
-    const net = $('networkSvg'), seq = $('sequenceWrap');
+    const net = $('networkSvg'), seq = $('sequenceWrap'), wrap = $('labWrap');
     seq.removeAttribute('hidden');
+    wrap.removeAttribute('hidden');
     net.style.display = v === 'network' ? '' : 'none';
     seq.style.display = v === 'sequence' ? '' : 'none';
-    if (v === 'sequence') renderSequence(); else renderNetworkState();
+    wrap.style.display = v === 'lab' ? '' : 'none';
+    $('canvas').classList.toggle('lab-mode', v === 'lab');
+    document.querySelectorAll('.view-tabs button').forEach(b =>
+      b.classList.toggle('active', b.dataset.view === v));
+    if (v !== 'lab') labStop();
+    if (v === 'sequence') renderSequence();
+    else if (v === 'lab') renderLab();
+    else renderNetworkState();
   }
 
   /* ---------------- 事件绑定 ---------------- */
@@ -658,10 +912,34 @@
     });
 
     document.querySelectorAll('.view-tabs button').forEach(b => b.addEventListener('click', () => {
-      document.querySelectorAll('.view-tabs button').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
       setView(b.dataset.view);
     }));
+
+    /* 实验面板：事件委托，面板内容每次重绘也不会丢监听 */
+    $('labWrap').addEventListener('click', e => {
+      const hit = e.target.closest('[data-lab-r]');
+      if (hit) {
+        labStop();
+        lab.at = clamp(+hit.dataset.labR, 1, lab.rounds.length);
+        labSyncTable(lab.at);
+        renderLab();
+        return;
+      }
+      const btn = e.target.closest('[data-lab-act]');
+      if (!btn) return;
+      const act = btn.dataset.labAct;
+      if (act === 'play') labPlay();
+      else if (act === 'step') labStep(1);
+      else if (act === 'back') labStep(-1);
+      else if (act === 'reset') labReset();
+    });
+    $('labWrap').addEventListener('change', e => {
+      const sel = e.target.closest('select[data-lab]');
+      if (!sel) return;
+      const key = sel.dataset.lab;
+      lab.cfg[key] = (key === 'ssthresh' || key === 'lossRound') ? +sel.value : sel.value;
+      labRebuild();
+    });
 
     $('playBtn').addEventListener('click', play);
     $('stepBtn').addEventListener('click', () => stepOne(1));
@@ -690,6 +968,7 @@
       document.documentElement.setAttribute('data-theme', state.theme);
       $('themeBtn').querySelector('use').setAttribute('href', state.theme === 'dark' ? '#i-sun' : '#i-moon');
       if (!$('detailModal').hidden) renderHex(dlgPacket);
+      if (state.view === 'lab') renderLab();
     });
     $('langBtn').addEventListener('click', () => {
       state.lang = state.lang === 'zh' ? 'en' : 'zh';
@@ -759,6 +1038,11 @@
         if (e.key === 'ArrowRight') navDlg(1);
         return;
       }
+      if (state.view === 'lab') {
+        if (e.key === ' ') { e.preventDefault(); labPlay(); return; }
+        if (e.key === 'ArrowRight') { e.preventDefault(); labStep(1); return; }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); labStep(-1); return; }
+      }
       if (e.key === ' ') { e.preventDefault(); play(); }
       if (e.key === 'ArrowRight') { e.preventDefault(); stepOne(1); }
       if (e.key === 'ArrowLeft') { e.preventDefault(); stepOne(-1); }
@@ -773,15 +1057,24 @@
     renderNetwork();
     state.index = sc().packets.length - 1; // 首屏直接展示「课程完成」态
     state.finished.add('http');
+    syncLabTab();
     renderCurrent();
     renderNetworkState();
 
-    // 深链接：#sc=dns&view=sequence&packet=1 可直接定位到某个视图 / 报文
+    // 深链接：#sc=tcpcc&view=lab&packet=1 可直接定位到某个课程 / 视图 / 报文
     const q = new URLSearchParams(location.hash.replace(/^#/, ''));
     if (q.get('sc') && D.scenarios[q.get('sc')]) switchScenario(q.get('sc'));
-    if (q.get('view') === 'sequence') {
-      const tab = document.querySelector('.view-tabs button[data-view="sequence"]');
-      if (tab) tab.click();
+    const v = q.get('view');
+    if (v === 'network' || v === 'sequence' || v === 'lab') {
+      const tab = document.querySelector('.view-tabs button[data-view="' + v + '"]');
+      if (tab && !tab.hidden) setView(v);
+    }
+    // #sc=tcpcc&view=lab&lab=8 可直接停在第 8 个 RTT
+    const lr = parseInt(q.get('lab'), 10);
+    if (!isNaN(lr) && state.view === 'lab') {
+      lab.at = clamp(lr, 0, lab.rounds.length);
+      if (lab.at > 0) labSyncTable(lab.at);
+      renderLab();
     }
     const n = parseInt(q.get('packet'), 10);
     if (!isNaN(n)) openModal(clamp(n, 0, sc().packets.length - 1));

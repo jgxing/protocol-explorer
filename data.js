@@ -88,7 +88,7 @@
         F('确认号 Ack', String(ack), 8, 4, '期望收到的下一个字节编号，表示此前所有字节均已正确收到。'),
         F('数据偏移 / 保留', '5 (20 字节)', 12, 2, 'TCP 首部长度，单位 4 字节；无选项时为 20 字节。'),
         F('标志位 Flags', flagLabel, 13, 1, 'SYN 建连、ACK 确认、PSH 立即交付、FIN 断开、RST 复位。'),
-        F('窗口大小', String(o.win || 64240), 14, 2, '接收方通告的可用缓冲区大小，实现流量控制。'),
+        F('窗口大小', String(o.win || 64240), 14, 2, o.windowDesc || '接收方通告的可用缓冲区大小，实现流量控制。'),
         F('校验和', '0xf02a', 16, 2, '覆盖伪首部 + TCP 首部 + 数据，检测传输中的比特差错。'),
         F('紧急指针', '0', 18, 2, '仅 URG 置位时有效，本报文未使用。'),
         ...(payloadLen ? [F('数据载荷', payloadLen + ' 字节' + (o.truncated ? '（此处展开前 ' + (o.shown || payloadLen) + ' 字节）' : ''), 20, payloadLen, '上层应用数据；TCP 把它当作无结构的字节流。')] : [])
@@ -1449,8 +1449,168 @@
     });
   })();
 
+  /* 18 · TCP 拥塞控制实验 —— 共享仿真内核
+     每个 RTT 推进一步：慢启动 cwnd 每轮翻倍（不超过 ssthresh），
+     拥塞避免每轮 +1 MSS；丢包时按 Reno / Tahoe 与 dup ACK / RTO 分派恢复动作。
+     data.js 用它生成默认参数下的抓包时序，app.js 用它实时画可交互的 cwnd 曲线。 */
+  const LAB_DEFAULT = { algo: 'reno', ssthresh: 8, lossMode: 'dupack', lossRound: 8, rounds: 14 };
+
+  function simulateCC(cfg) {
+    const o = Object.assign({}, LAB_DEFAULT, cfg || {});
+    const out = [];
+    let cwnd = 1, ssthresh = o.ssthresh, total = 0;
+    for (let r = 1; r <= o.rounds; r++) {
+      const startCwnd = cwnd, startSsth = ssthresh;
+      const phase = startCwnd < startSsth ? 'ss' : 'ca';
+      const sent = Math.floor(startCwnd);
+      total += sent;
+      let event = null, infl = null, half = 0, endCwnd, endSsth = startSsth;
+      if (r === o.lossRound) {
+        half = Math.max(2, Math.floor(startCwnd / 2));
+        endSsth = half;
+        event = o.lossMode;
+        if (o.lossMode === 'dupack' && o.algo === 'reno') { infl = half + 3; endCwnd = half; }
+        else endCwnd = 1;
+      } else {
+        endCwnd = phase === 'ss' ? Math.min(startCwnd * 2, startSsth) : startCwnd + 1;
+      }
+
+      let zh, en;
+      if (event === 'dupack' && o.algo === 'reno') {
+        zh = 'RTT ' + r + '：收到第 3 个重复 ACK，判定只是单个段丢失 → 立即快重传。ssthresh = ' + startCwnd + '/2 = ' + half +
+          '；快恢复期间 cwnd 临时膨胀到 ' + half + '+3 = ' + infl + '，待新数据 ACK 到达后收缩回 ' + half +
+          '，直接进入拥塞避免，不回退到慢启动。';
+        en = 'RTT ' + r + ': the 3rd duplicate ACK signals a single lost segment, so fast retransmit fires at once. ssthresh = ' +
+          startCwnd + '/2 = ' + half + '. Fast recovery temporarily inflates cwnd to ' + half + '+3 = ' + infl +
+          '; a new ACK deflates it back to ' + half + ' and congestion avoidance resumes without slow start.';
+      } else if (event === 'dupack') {
+        zh = 'RTT ' + r + '：3 个重复 ACK 触发快重传，但 Tahoe 没有快恢复机制：ssthresh = ' + startCwnd + '/2 = ' + half +
+          '，cwnd 直接降为 1，重新慢启动。同样的丢包，Reno 只降到 ' + half + '，差别就在快恢复。';
+        en = 'RTT ' + r + ': 3 duplicate ACKs trigger fast retransmit, but Tahoe has no fast recovery: ssthresh = ' +
+          startCwnd + '/2 = ' + half + ' and cwnd drops all the way to 1, restarting slow start. Reno would only fall back to ' + half + '.';
+      } else if (event === 'timeout') {
+        zh = 'RTT ' + r + '：重传计时器 RTO 超时，说明网络拥塞严重、连 ACK 都回不来。ssthresh = ' + startCwnd + '/2 = ' + half +
+          '，cwnd 归 1 重新慢启动，这是最保守也最伤吞吐的恢复方式（Reno / Tahoe 一致）。';
+        en = 'RTT ' + r + ': the retransmission timer (RTO) expires — congestion is severe enough that ACKs stop coming back. ssthresh = ' +
+          startCwnd + '/2 = ' + half + ', cwnd resets to 1 and slow start begins again. This is the most conservative, most costly recovery (same in Reno and Tahoe).';
+      } else if (phase === 'ss') {
+        zh = 'RTT ' + r + '：慢启动 cwnd = ' + startCwnd + ' → ' + endCwnd + '。每收到 1 个 ACK 就把 cwnd 加 1 MSS，一个 RTT 内近似翻倍，快速试探可用带宽。';
+        en = 'RTT ' + r + ': slow start, cwnd = ' + startCwnd + ' → ' + endCwnd +
+          '. Each ACK adds 1 MSS, so cwnd roughly doubles every RTT to probe available bandwidth quickly.';
+      } else {
+        zh = 'RTT ' + r + '：拥塞避免 cwnd = ' + startCwnd + ' → ' + endCwnd + '。cwnd 已越过 ssthresh = ' + startSsth +
+          '，改为每个 RTT 只增加 1 MSS，线性逼近网络容量（AIMD 的「加性增」）。';
+        en = 'RTT ' + r + ': congestion avoidance, cwnd = ' + startCwnd + ' → ' + endCwnd +
+          '. cwnd has passed ssthresh = ' + startSsth + ', so it grows by only 1 MSS per RTT, approaching capacity linearly (the additive increase in AIMD).';
+      }
+
+      out.push({ r: r, cwnd: startCwnd, ssthresh: startSsth, phase: phase, sent: sent, total: total,
+        event: event, infl: infl, half: half, endCwnd: endCwnd, endSsth: endSsth,
+        algo: o.algo, lossMode: o.lossMode, zh: zh, en: en });
+      cwnd = endCwnd;
+      ssthresh = endSsth;
+    }
+    return out;
+  }
+
+  (function () {
+    const MSS = 1460, SPORT = 52344, DPORT = 80, GAP = 0.008;
+    const WIN_DESC = '这是接收方通告的接收窗口 rwnd（流量控制），不是拥塞窗口 cwnd。cwnd 只存在于发送端内核，TCP 首部里没有这个字段；实际可发送量 = min(cwnd, rwnd)。';
+    const RD = simulateCC(LAB_DEFAULT);
+    const ps = [];
+    let seq = 1;
+
+    const seg = (n, label) => LINES('data', label, 'DATA', C.payload,
+      [{ n: 'MSS 载荷片段', v: '[SEG ' + n + '] ' + 'A'.repeat(28) + '\r\n',
+        d: '应用字节流被按 MSS = 1460 字节切段；接收端按 Seq 重组。一次允许在途多少段，由拥塞窗口 cwnd 决定。' }],
+      '实际段长 1460 字节，此处只展开开头片段。注意 cwnd 是发送端内核状态变量，任何首部字段里都找不到它。');
+
+    const mk = (fromWeb, s, a, flags, label, app) =>
+      frame(fromWeb ? IP_WEB : IP_CLIENT, fromWeb ? IP_CLIENT : IP_WEB, 6, '6 (TCP)',
+        tcpTo(fromWeb ? DPORT : SPORT, fromWeb ? SPORT : DPORT, s, a, flags, label,
+          { service: 'http', windowDesc: WIN_DESC }),
+        app, { inbound: fromWeb });
+
+    RD.forEach(rd => {
+      const base = (rd.r - 1) * 0.040;
+      let k = 0;
+      const push = o => {
+        o.t = Math.round((base + k++ * GAP) * 1000) / 1000;
+        o.rtt = rd.r;
+        o.osi = [4, 3, 2]; o.layer = 4;
+        ps.push(P(o));
+      };
+      const phase = rd.phase === 'ss' ? '慢启动' : '拥塞避免';
+
+      push({ src: IP_CLIENT, dst: IP_WEB, proto: 'TCP', kind: 'ccdata',
+        phase: 'RTT ' + rd.r + ' · ' + phase, from: 'client', to: 'web',
+        title: 'RTT ' + rd.r + ' · 发送 ' + rd.sent + ' 个段',
+        info: '[PSH, ACK] Seq=' + seq + ' Len=1460 · cwnd=' + rd.cwnd + ' (' + rd.sent + ' seg/RTT)',
+        displaySize: '1460 B', truncated: true, note: rd.zh,
+        layers: mk(false, seq, 1, 0x18, '0x18 PSH,ACK', seg(rd.r, 'TCP 段 · RTT ' + rd.r)) });
+
+      if (rd.event === 'dupack') {
+        const lostSeq = seq + 2 * MSS;
+        for (let j = 1; j <= 3; j++) {
+          push({ src: IP_WEB, dst: IP_CLIENT, proto: 'TCP', kind: 'dupack',
+            phase: 'RTT ' + rd.r + ' · 丢包检测', from: 'web', to: 'client',
+            title: '重复 ACK #' + j, info: '[DUP ACK ' + j + '] Ack=' + lostSeq + ' · 仍缺 Seq=' + lostSeq,
+            note: '接收端收到乱序段，立即重发对同一字节的 ACK。第 3 个重复 ACK 是「段已丢失而非网络瘫痪」的强信号，发送端据此触发快重传。',
+            layers: mk(true, 1, lostSeq, 0x10, '0x10 ACK', null) });
+        }
+        push({ src: IP_CLIENT, dst: IP_WEB, proto: 'TCP', kind: 'retrans',
+          phase: 'RTT ' + rd.r + ' · 快重传', from: 'client', to: 'web',
+          title: '快重传丢失段', info: '[RETRANSMISSION] Seq=' + lostSeq + ' Len=1460 · cwnd→' + (rd.infl || 1),
+          displaySize: '1460 B', truncated: true,
+          note: '不等 RTO 超时，收到第 3 个重复 ACK 就立即重传缺失段；Reno 同时把 ssthresh 设为 cwnd/2 = ' + rd.half +
+            '，并把 cwnd 临时膨胀到 ssthresh+3 = ' + rd.infl + ' 进入快恢复。',
+          layers: mk(false, lostSeq, 1, 0x18, '0x18 PSH,ACK', seg(rd.r, '重传段 · RTT ' + rd.r)) });
+      }
+
+      const nextAck = seq + rd.sent * MSS;
+      push({ src: IP_WEB, dst: IP_CLIENT, proto: 'TCP', kind: 'ack',
+        phase: 'RTT ' + rd.r + ' · 累计确认', from: 'web', to: 'client',
+        title: rd.event === 'dupack' ? '新数据 ACK · 退出快恢复' : '累计 ACK',
+        info: '[ACK] Ack=' + nextAck + ' · 确认本轮 ' + rd.sent + ' 段 · cwnd→' + rd.endCwnd,
+        note: rd.event === 'dupack'
+          ? '确认了包括重传段在内的所有在途数据（新数据 ACK），Reno 把膨胀的窗口收缩回 ssthresh = ' + rd.half + '，跳过慢启动，直接继续拥塞避免。'
+          : '累计确认：Ack=N 表示 N 之前的字节全部收到。收到 ACK 才推进 cwnd，因此拥塞控制天然是「自时钟」(self-clocking) 的。',
+        layers: mk(true, 1, nextAck, 0x10, '0x10 ACK', null) });
+
+      seq = nextAck;
+    });
+
+    def('tcpcc', {
+      name: 'TCP 拥塞控制', title: '拥塞控制实验', cat: 'base', sub: '慢启动 · 拥塞避免 · 快恢复',
+      osi: 4, layer: 4, nodes: ['client', 'gateway', 'web'], seqNodes: ['client', 'gateway', 'web'],
+      labels: {
+        client: { name: '发送端', en: 'Sender', ip: IP_CLIENT },
+        gateway: { name: '瓶颈链路', en: 'Bottleneck', ip: 'RTT 40 ms · 队列' },
+        web: { name: '接收端', en: 'Receiver', ip: IP_WEB }
+      },
+      steps: [
+        { t: '慢启动', d: 'cwnd 从 1 MSS 起步，每个 RTT 翻倍', at: 2 },
+        { t: '越过阈值', d: 'cwnd 达到 ssthresh，切换增长方式', at: 8 },
+        { t: '拥塞避免', d: '每 RTT 只加 1 MSS，线性探测带宽', at: 14 },
+        { t: '丢包与快重传', d: '3 个重复 ACK 触发重传与减半', at: 20 },
+        { t: '快恢复', d: '窗口收缩回 ssthresh，不回慢启动', at: 32 }
+      ],
+      desc: 'TCP 不靠路由器发信号，而是用丢包当拥塞信号：慢启动指数试探、拥塞避免线性逼近，一旦丢包就乘法减小（AIMD）。Reno 用 3 个重复 ACK 区分「偶发丢包」与「网络瘫痪」，靠快重传 + 快恢复避免吞吐崩塌。',
+      tip: 'cwnd 不在 TCP 首部里！首部中 16 位的 Window 字段是接收方的 rwnd（流量控制），cwnd 是发送端内核自己维护的状态；实际发送窗口 = min(cwnd, rwnd)。点开任意数据段，展开「窗口大小」字段即可看到这条说明。切换到「拥塞实验」视图还能改算法与参数，实时观察 cwnd 曲线。',
+      stats: [
+        { k: '拥塞算法', v: 'Reno / Tahoe 可切换' },
+        { k: '初始阈值', v: 'ssthresh = 8 MSS' },
+        { k: '默认丢包', v: 'RTT 8 · 3 个重复 ACK' },
+        { k: '发送窗口', v: 'min(cwnd, rwnd)' },
+        { k: 'MSS / RTT', v: '1460 B / 40 ms' }
+      ],
+      packets: ps,
+      lab: Object.assign({}, LAB_DEFAULT)
+    });
+  })();
+
   /* ---------- 元信息 ---------- */
-  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf', 'bgp'];
+  const ORDER = ['http', 'https', 'dns', 'tcp', 'udp', 'ip', 'arp', 'icmp', 'dhcp', 'tls', 'websocket', 'smtp', 'ftp', 'quic', 'rip', 'ospf', 'bgp', 'tcpcc'];
   const CATEGORIES = [
     { id: 'all', zh: '全部', en: 'All' },
     { id: 'base', zh: '基础', en: 'Core' },
@@ -1460,18 +1620,22 @@
   const KIND_COLORS = {
     dns: '#2f6fd0', tcp: '#0f9c9c', request: '#e8a317', response: '#7c4dd6',
     ack: '#a5b0c7', tls: '#d24b6a', routing: '#2f8fd0', update: '#8a5cd6',
-    open: '#e08a2e', keepalive: '#3aa87a', notify: '#d0483f'
+    open: '#e08a2e', keepalive: '#3aa87a', notify: '#d0483f',
+    ccdata: '#2f6fd0', dupack: '#e8a317', retrans: '#d0483f'
   };
   const KIND_ZH = { dns: 'DNS', tcp: 'TCP', request: '请求', response: '响应', ack: '纯 ACK', tls: 'TLS',
-    routing: '路由报文', update: '路由更新', open: 'OPEN 协商', keepalive: '保活', notify: '会话通知' };
+    routing: '路由报文', update: '路由更新', open: 'OPEN 协商', keepalive: '保活', notify: '会话通知',
+    ccdata: '数据段', dupack: '重复 ACK', retrans: '快重传' };
   const KIND_EN = { dns: 'DNS', tcp: 'TCP', request: 'Request', response: 'Response', ack: 'Bare ACK', tls: 'TLS',
-    routing: 'Routing', update: 'Route update', open: 'BGP OPEN', keepalive: 'Keepalive', notify: 'Notification' };
+    routing: 'Routing', update: 'Route update', open: 'BGP OPEN', keepalive: 'Keepalive', notify: 'Notification',
+    ccdata: 'Data segment', dupack: 'Dup ACK', retrans: 'Retransmit' };
   const OSI_NAMES = ['物理层', '数据链路层', '网络层', '传输层', '会话层', '表示层', '应用层'];
 
   global.ProtocolData = {
     scenarios: S, order: ORDER, categories: CATEGORIES,
     kindColors: KIND_COLORS, kindZh: KIND_ZH, kindEn: KIND_EN,
     osiNames: OSI_NAMES, colors: C, util: U,
+    labSimulate: simulateCC, labDefault: LAB_DEFAULT,
     ipClient: IP_CLIENT, ipDns: IP_DNS, ipWeb: IP_WEB
   };
 })(window);
